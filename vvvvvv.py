@@ -1,5 +1,9 @@
-import pygame, json, math, random, time, os, distutils
-from pygame.draw import line, rect
+import os
+try:
+    import pygame, json, math, random, time, os
+    from pygame.draw import line, rect
+except ImportError:
+    os.system('py3 -m pip install pygame')  # Automatically install PyGame
 from spritesheet import Spritesheet   # Saved in another file since it's used elsewhere
 from palette import Palette
 
@@ -1610,7 +1614,7 @@ def runMenus():   # Run code depending on what menu option is selected
             
         if menu.selected == 2: # Infinite Flips
             if flippyboi == True:
-                flip = "Flip in midair!"
+                flip = "Flip 'til your heart's content"
             else:
                 flip = "You regain your flip when you touch the ground"
             temp = medfont.render(flip, 1, WHITE)

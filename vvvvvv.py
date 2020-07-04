@@ -2,6 +2,7 @@ import os
 try:
     import pygame, json, math, random, time, os
     from pygame.draw import line, rect
+    from datetime import datetime
 except ImportError:
     os.system('py3 -m pip install pygame')  # Automatically install PyGame
 from spritesheet import Spritesheet   # Saved in another file since it's used elsewhere
@@ -10,18 +11,20 @@ from palette import Palette
 pygame.mixer.pre_init(44100, -16, 2, 1024)  # Removes sound latency
 pygame.init()
 
-screenSize = [960, 640] # 960 , 640
+screenSize = [960, 640] # 960 , 640     # 1536 , 864
 screen = pygame.display.set_mode(screenSize)
 pygame.display.set_caption("VVVVVV")
 pygame.display.set_icon(pygame.image.load("./assets/icon.png"))
 epstein_didnt_kill_himself = True
 clock = pygame.time.Clock()
 framerate = 60  # In Frames per seconds.
+ingame = False  # False means you're in a menu, True means you're in gameplay
 
 # COLORS
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 RED = (200, 10, 10)
+CYAN = (20, 200, 220)
 
 # FONTS
 font = pygame.font.Font('./assets/PetMe64.ttf', 24)
@@ -41,16 +44,16 @@ teleSheet = Spritesheet("./assets/teleporters.png")
 enemySheetSmall = Spritesheet("./assets/enemies_small.png")
 enemySheetLarge = Spritesheet("./assets/enemies_large.png")
 
+
 # MISC TEXTURES
 menuBG = pygame.image.load("./assets/menuBG.png").convert()
 levelComplete = pygame.image.load("./assets/levelcomplete.png").convert()
-logo = pygame.image.load("./assets/logo.png").convert()
+logo = pygame.image.load("./assets/logo.png").convert_alpha()
 fadeout = pygame.image.load("./assets/fadeout2.png")
-logo.set_colorkey(BLACK)
 
 # Pre-render some text since it never changes
-subtitle = font.render("Pygame Edition", 1, (0, 255, 255))
-levelSelect = font.render("Select Stage", 1, (0, 255, 255))
+subtitle = font.render("Pygame Edition", 1, CYAN)
+levelSelect = font.render("Select Stage", 1, CYAN)
 
 def str2bool(v):    # Appareantly, Python can't convert strings to booleans. "Fine I'll do it myself"
   return v.lower() in ("true", "t", "1", "society")
@@ -64,9 +67,9 @@ levelFolder = levels[0]["folder"]
 with open("settings.vvvvvv", 'r') as s:
     settings = json.loads(s.read())
     for saved in settings:
-        volume_slider = float(saved["musicvolume"])  # Volume for music
-        sound_slider = float(saved["sfxvolume"])     # Volume for sound effects
-        musicpackSelected = int(saved["musicpack"])  # Which music pack is selected?
+        musicvolume = float(saved["musicvolume"])  # Volume for music
+        sfxvolume = float(saved["sfxvolume"])     # Volume for sound effects
+        musicpackSelected = int(saved["musicpackSelected"])  # Which music pack is selected?
         msEnabled = str2bool(saved["msEnabled"])     # Extra timer info?
         debugtools = str2bool(saved["debugtools"])   # Debug tools enabled?
         invincible = str2bool(saved["invincible"])   # Invincibility enabled?
@@ -81,9 +84,9 @@ with open("records.vvvvvv", 'r') as recordArray:
 # SOUND EFFECTS
 
 def updateVolume():
-  global sound_slider
+  global sfxvolume
   for sfx in sfx_list:
-    pygame.mixer.Sound.set_volume(sfx, sound_slider)
+    pygame.mixer.Sound.set_volume(sfx, sfxvolume)
   
 sfx_bang = pygame.mixer.Sound("./assets/sounds/bang.wav")
 sfx_beep = pygame.mixer.Sound("./assets/sounds/beep.wav")
@@ -97,7 +100,7 @@ sfx_save = pygame.mixer.Sound("./assets/sounds/save.wav")
 sfx_tele = pygame.mixer.Sound("./assets/sounds/tele.wav")
 sfx_list = [sfx_bang,sfx_beep,sfx_blip,sfx_boop,sfx_flip,sfx_flop,sfx_hurt,sfx_menu,sfx_save,sfx_tele]
 updateVolume()
-  
+
 # CLASSES
 
 class Player:
@@ -110,7 +113,9 @@ class Player:
         self.velocitymax = 16   # Player Y maximum speed
         self.velocity = 16      # Player Y current speed
         self.acceleration = 0   # Player X current speed
-
+        self.inputValues = [0,0,1,0,0] # Used for replays / Overhauls self.walking, self.movement, and overall simplifies the code
+        # All values are Boolean, 0 = False, 1 = True : 1st value is Left press. 2nd value is Right press. 3rd is flip key. 4th is R key. 5th is frame count
+        
         # These values are dispalyed when completing a level and saved as high scores
         self.deaths = 0
         self.flips = 0
@@ -118,14 +123,17 @@ class Player:
         self.secs = 0
         self.frames = 0
 
+        self.replay = 0            # Arithmetic logic for saving/playing replays
+        self.fullReplay = []
+        self.inputs = []
+        self.frameinput = []
+
         self.grounded = False      # Touching the ground? (true = able to flip)
         self.flipped = False       # Currently flipped?
         self.touchedLine = False   # Touched a gravity line? (allows for smoother easing)
-        self.walking = False       # Display walking animation?
         self.facingRight = True    # Facing right? (whether to flip texture or not)
         self.alive = True          # Alive?
         self.hidden = False        # Make the sprite visible?
-        self.movement = [False, False]          # [moving left, moving right]
         self.blocked = [False, False]           # [able to move left, able to move right]
         self.verticalPlatform = [False, False]  # [platform position, platform speed] - Vertical platforms are harrrrd
         self.winTarget = []        # Position to automatically walk to upon touching a teleporter
@@ -140,7 +148,7 @@ class Player:
         self.winTimer = 0          # How many frames have passed since you beat the level - for timing the win cutscene
         self.textboxBuffer = False # Set to true in ending cutscene to progress to main menu
         self.bufferWindow = 7      # The buffer window for inputting a flip
-        self.buffer = 0            # ^ timer      
+        self.buffer = -999         # ^ timer      
         self.localTimer = 0        # Timer used for detecting collision
         self.lineTimer = 0         # Timer used for avoiding line collision
         self.flipable = False      # Able to flip directions?
@@ -149,8 +157,6 @@ class Player:
     def refresh(self):
         # Reset these values, calculate them later
         self.grounded = False
-        self.walking = False
-        self.movement = [False, False]
         self.blocked = [False, False]
         self.verticalPlatform = [-999, False]  # Assume you're not touching a vertical platform. You're probably not
 
@@ -202,9 +208,60 @@ class Player:
             self.pendDieTemp = 0
         else:
             self.pendingDie += 1
-            
+    def getInput(self):
+        # print(self.replay)
+        if self.winTimer == 0 and self.replay <= 0:
+            c = self.inputValues.copy()
+            if key[pygame.K_LEFT] or key[pygame.K_a] and not (key[pygame.K_RIGHT] or key[pygame.K_d]):
+                self.inputValues[0] = 1
+            else:
+                self.inputValues[0] = 0
+            if key[pygame.K_RIGHT] or key[pygame.K_d] and not (key[pygame.K_LEFT] or key[pygame.K_a]):
+                self.inputValues[1] = 1
+            else:
+                self.inputValues[1] = 0          
+            if key[pygame.K_SPACE] or key[pygame.K_UP] or key[pygame.K_DOWN] or key[pygame.K_z] or key[pygame.K_w] or key[pygame.K_s] or key[pygame.K_v] or key[pygame.K_RETURN]:
+                    self.inputValues[2] = 1
+            else:
+                    self.inputValues[2] = 0
+            if key[pygame.K_r]:
+                    self.inputValues[3] = 1
+            else:
+                    self.inputValues[3] = 0
+            if c != self.inputValues:
+                self.inputValues[4] = (self.frames + self.secs * 60 + self.mins * 3600)
+                self.fullReplay.append(self.inputValues.copy())
+
+        elif self.winTimer == 0 and self.replay >= 1:
+            # print(self.frameinput[self.replay - 1])
+            if (self.frames + self.secs * 60 + self.mins * 3600) == int(self.frameinput[self.replay - 1]):
+                num = int(self.inputs[self.replay - 1],2)
+                if num >= 8:
+                    self.inputValues[0] = 1
+                    num -= 8
+                else:
+                    self.inputValues[0] = 0
+                if num >= 4:
+                    self.inputValues[1] = 1
+                    num -= 4
+                else:
+                    self.inputValues[1] = 0
+                if num >= 2:
+                    self.inputValues[2] = 1
+                    num -= 2
+                else:
+                    self.inputValues[2] = 0
+                if num >= 1:
+                    self.inputValues[3] = 1
+                else:
+                    self.inputValues[3] = 0
+                self.replay += 1
+            elif self.frameinput[self.replay - 1] == 0:
+                self.replay = - 1   # Stop the replay once its over. Theoretically doesn't matter but in the case of a desynced replay, gives control back to the player.
+        else:
+            self.inputValues = [0,0,0,0,0]
     def exist(self):  # Buckle up, this one's a big boy
-        global breakingPlatforms, ingame, savedGame, invincible, flippyboi, debugtools, musicpackSelected
+        global breakingPlatforms, ingame, savedGame, invincible, flippyboi, debugtools, musicpackSelected, levelnum
         # Gravity line easing
         if self.touchedLine:
             self.velocity -= round(savedVelocity / 4.5)
@@ -250,40 +307,13 @@ class Player:
             if self.pendingDie > 0 and self.pendDieTemp >= 5:
                 self.pendingDie = 0
                 self.pendDieTemp = 0
-                
-            if self.buffer < self.bufferWindow and self.buffer > 0:
-                self.buffer += 1
-            elif self.buffer >= self.bufferWindow:
-                self.buffer = 0
             if (self.grounded or self.coyoteTimer < self.coyoteFrames) and self.buffer >= 0 and self.buffer < self.bufferWindow and self.velocity == savedVelocity:
                 self.flipable = True
             else:
                 self.flipable = False
-            if self.flipable == True and self.buffer > 0 and self.velocity == savedVelocity:
-                self.flip()  # If you're on the ground and pressed the flip key, flip
-                self.coyoteTimer = self.coyoteFrames  # Disable coyote flipping
-                self.flipable = False
-                self.buffer = 0
-
-
-
                 
             if flippyboi == True:       # Enable midair flipping
                 self.flipable = True
-                
-            if not self.grounded:
-                yOff = 3
-                playerTile = self.getStandingOn(False)
-                if self.flipped:
-                    yOff = -1   # Small offset if you're flipped
-                solidArr = []
-                for i in range(3):  # Check nearby blocks
-                    objID = getobj([snap(self.x) + i, playerTile[1] + yOff])  # Check for solid block
-                    if objID == -1:
-                        objID = getobj([snap(self.x) + i, playerTile[1] + yOff], 2)  # Check sprite layer
-                    solidArr.append(issolid(objID))
-                if solidArr == [True, False, True]:  # If you're sandwiched between two solid blocks... 
-                    self.grounded = True  # ...consider the player grounded
                     
             if self.verticalPlatform[0] != -999:  # If you ARE on a vertical platform
                 self.grounded = True  # Consider the player grounded
@@ -338,16 +368,16 @@ class Player:
                 # If you touched a teleporter, pathfind to winTarget (center of the teleporter)
                 if self.winTarget[1] and self.x < self.winTarget[0] and not self.blocked[1]:
                     self.x += self.speed
-                    self.movement[1] = True
-                    self.walking = True
+                    self.inputValues[1] = 1
                     self.animationTimer += 1
                 elif not self.winTarget[1] and self.x > self.winTarget[0] and not self.blocked[0]:
                     self.x -= self.speed
-                    self.movement[0] = True
-                    self.walking = True
+                    self.inputValues[0] = 1
                     self.animationTimer += 1
-                    
-            elif key[pygame.K_RIGHT] or key[pygame.K_d] and not (key[pygame.K_LEFT] or key[pygame.K_a]):
+                else:
+                    self.inputValues[0] = 0
+                    self.inputValues[1] = 0
+            elif self.inputValues[1] == 1:  # If a "right" key is pressed or held
                 if not self.blocked[1]:
                     if self.acceleration <= self.speed:
                         self.acceleration += 2.2
@@ -359,9 +389,7 @@ class Player:
                         self.x += 2.2
                     self.x += self.acceleration  # Move right if you're able to
                     self.animationTimer += 1
-                    self.walking = True
-                self.movement[1] = True
-            elif key[pygame.K_LEFT] or key[pygame.K_a] and not (key[pygame.K_RIGHT] or key[pygame.K_d]):
+            elif self.inputValues[0] == 1:  # If a "left" key is pressed or held
                 if not self.blocked[0]:
                     if self.acceleration >= -self.speed:
                         self.acceleration -= 2.2
@@ -373,8 +401,6 @@ class Player:
                         self.x -= 2.2
                     self.x += self.acceleration  # Move left if you're able to
                     self.animationTimer += 1
-                    self.walking = True
-                self.movement[0] = True
             else:
                 self.acceleration = round(self.acceleration / 1.5)
                 if self.blocked[0] and self.blocked[1]:
@@ -387,27 +413,30 @@ class Player:
 
                 
             self.x = round(self.x)
-            if not self.walking:
+            if self.inputValues[0] == 0 and self.inputValues[1] == 0:
                 self.animationTimer = self.animationSpeed - 1  # Change to 'walking' sprite as soon as you start moving again
+            if self.inputValues[2] == 1:
+                self.buffer += 1
+            else:
+                self.buffer = 0
                 
+            if self.inputValues[2] == 1 and self.flipable and self.velocity == savedVelocity and self.buffer < self.bufferWindow and self.buffer > 0:
+                self.flip()
+                self.coyoteTimer = self.coyoteFrames
+                self.flipable = False
+                self.buffer = -9999
+            if self.inputValues[3] == 1:
+                if invincible:
+                    temp = True
+                    invincible = False
+                else:
+                    temp = False
+                self.die()  # Die if you press R
+                self.die()
+                invincible = temp    
             for event in events:
                 if event.type == pygame.KEYDOWN and self.winTimer == 0:
-                    if event.key in flipKeys:
-                        self.buffer = 1
-                    if event.key in flipKeys and self.flipable and self.velocity == savedVelocity:
-                        self.flip()
-                        self.coyoteTimer = self.coyoteFrames
-                        self.flipable = False
-                        self.buffer = 0
-                    if event.key == pygame.K_r:
-                        if invincible:
-                            temp = True
-                            invincible = False
-                        else:
-                            temp = False
-                        self.die()  # Die if you press R
-                        self.die()
-                        invincible = temp
+                    
                     if event.key == pygame.K_COMMA and debugtools == True:  # Debug, moves player 1 pixel at a time
                         self.x -= 1
                     if event.key == pygame.K_PERIOD and debugtools == True:
@@ -418,7 +447,7 @@ class Player:
                 self.x -= 30   # Not a cheat
                 self.y -= 50   # Not a cheat
 
-            if (self.movement[0] and self.facingRight) or (self.movement[1] and not self.facingRight):
+            if (self.inputValues[0] == 1 and self.facingRight) or (self.inputValues[1] == 1 and not self.facingRight):
                 self.turn()  # Flip player X when necessary
 
             if self.y < -32:  # Top exit
@@ -457,7 +486,7 @@ class Player:
 
         if self.winTimer > 0:   # Win cutscene
             if self.winTimer < 80:
-                pygame.mixer.music.set_volume(volume_slider / 80 * (80 - self.winTimer))
+                pygame.mixer.music.set_volume(musicvolume / 80 * (80 - self.winTimer))
             self.winTimer += 1
             if self.winTimer < 10:
                 local = 0
@@ -467,12 +496,11 @@ class Player:
             if self.winTimer == 235:
                 self.hidden = True      # ...then hide the player...
                 pygame.mixer.music.stop()
-                pygame.mixer.music.set_volume(volume_slider)
+                pygame.mixer.music.set_volume(musicvolume)
                 sfx_tele.play()
             if self.winTimer == 335:
                 pygame.mixer.music.load("./assets/musicpack" + str(musicpackSelected) + "/fanfare.ogg")  # ...then play a little jingle...
                 pygame.mixer.music.play(1)
-
             if self.winTimer > 335 and self.textboxBuffer == False:
                 screen.blit(levelComplete, (160, 50))   # ...then display "level complete"...
 
@@ -494,6 +522,7 @@ class Player:
                         "Congratulations!",
                         "Press ACTION to continue"
                     ]
+                    
 
                 if not len(self.winLines):
                     for i in range(len(messages)):  # Render win lines, but only once
@@ -530,7 +559,25 @@ class Player:
             if self.winTimer > 760 and self.textboxBuffer == False: #Freezes the timer until the ACTION key is pressed
                         self.winTimer = 760            
             if self.winTimer > 760 and self.winTimer < 815: screen.blit(fadeout, (-1448 + ((self.winTimer - 760) * 24), 0)) #Move the fadeout image across the screen
-            if self.winTimer >= 815: screen.blit(fadeout, (0, 0))
+            if self.winTimer >= 815:
+                # Saves a replay of the level. Hopefully it will take 5 frames or less to complete, otherwise the game will lag.
+                # Due to the size of the file, it should hopefully be fairly quick but not guaranteed if there is a lot of data.
+                screen.blit(fadeout, (0, 0))
+                if self.replay == 0:
+                    self.replay = -1
+                    now = datetime.now()
+                    current_time = './replays/' + str(now.strftime("%D")).replace('/','-') + ' ' + now.strftime("%H-%M-%S") + ".replay"
+                    with open(current_time, 'w') as s:
+                        s.write(str(levelnum) + '\n')
+                        x = 0
+                        line = ''
+                        while x < len(self.fullReplay):
+                            y = 0
+                            while y < len(self.fullReplay[x]):
+                                s.write(str(self.fullReplay[x][y]))
+                                y += 1
+                            s.write('\n')
+                            x += 1
             if self.winTimer > 820:
                         # Quit level, delete save, display menu
                         ingame = False
@@ -539,8 +586,10 @@ class Player:
                         savedGame = False
                         try: os.remove('save.vvvvvv')    # Delete save file
                         except FileNotFoundError: pass   # Do nothing if there never was a save file
+                        self.frames = 0
+                        self.secs = 0
+                        self.mins = 0
                         buildmenu()
-
 
         # Basic timer
         else:
@@ -564,20 +613,20 @@ class Player:
             screen.blit(sprites[spriteNumber], (self.x, self.y))  # Render player
 
         if room.meta["warp"] == 1:  # If warping is enabled, render a second player if they're touching a screen border
-            if self.x < 33:
+            if self.x < 33 and not self.hidden:
                 screen.blit(sprites[spriteNumber], (self.x + screenSize[0] + 18, self.y))
-            elif self.x > screenSize[0] - 33:
+            elif self.x > screenSize[0] - 33 and not self.hidden:
                 screen.blit(sprites[spriteNumber], (self.x - screenSize[0] - 18, self.y))
 
         if room.meta["warp"] == 2:  # Same as above but for vertical warping
-            if self.y < 32:
-                screen.blit(sprites[spriteNumber], (self.x, self.y + screenSize[1]))
+            if self.y < 96 and not self.hidden:
+                screen.blit(sprites[spriteNumber], (self.x, self.y + (screenSize[1] + 0)))
                 if self.alive and self.velocity == 16 and not self.grounded and self.flipped:
-                    self.y -=16
-            elif self.y > screenSize[1] - 100:
-                screen.blit(sprites[spriteNumber], (self.x, self.y - screenSize[1]))
+                    self.y -= 4
+            elif self.y > screenSize[1] - 96 and not self.hidden:
+                screen.blit(sprites[spriteNumber], (self.x, self.y - screenSize[1] - 32))
                 if self.alive and self.velocity == 16 and not self.grounded and not self.flipped:
-                    self.y +=16
+                    self.y += 8
 
 class Room:
     def __init__(self, x=5, y=5):
@@ -887,18 +936,18 @@ class Platform:
         if wall[1]: self.ySpeed *= -1
 
         # HORIZONTAL PLATFORMS (easy)
-        if self.ySpeed == 0 and solidblock(4 + (self.xSpeed != 0), self.x, self.y):  # Move player with the platform
+        if self.ySpeed == 0 and solidblock(3 + (self.xSpeed != 0), self.x, self.y):  # Move player with the platform
             if self.xSpeed < 0 and not player.blocked[0] or self.xSpeed > 0 and not player.blocked[1]:  # If left/right is not blocked...
 ##                if not (player.acceleration < -4 and player.blocked[0]) or not (player.acceleration > 4 and player.blocked[1]):
                 if (player.acceleration > -9 and not player.blocked[0]) or (player.acceleration < 9 and not player.blocked[1]):
                     if player.alive:
                         player.x += self.xSpeed # Move with the platform
-                        player.acceleration += (self.xSpeed / 100)
+                        player.acceleration += (self.xSpeed / 1024)
                     
 
         # VERTICAL PLATFORMS (hard!!)
         elif self.xSpeed == 0:
-            flipoffset = 16  # Offset to apply if flipped/not flipepd
+            flipoffset = 16  # Offset to apply if flipped/not flipped
             if player.flipped:
                 flipoffset = 75
             if (player.alive and not player.flipped and player.touching([self.x, self.y - 16], 0, [4, 1])) or (
@@ -995,25 +1044,23 @@ class Menu:
 
 flipKeys = [pygame.K_SPACE, pygame.K_UP, pygame.K_DOWN, pygame.K_z, pygame.K_w, pygame.K_s, pygame.K_v, pygame.K_RETURN]  # Keys that make you flip
 
-ingame = False  # False means you're in a menu, True means you're in gameplay
-
-sprites = []                      # Array of all the textures
-groundTiles = []                  # Array of all ground tiles
-backgroundTiles = []              # Array of all background tiles
-spikeTiles = []                   # Array of all spike tiles
-warpBGs = []                      # Array of warp backgrounds
-teleporters = []                  # Array of teleporter frames
-enemySprites = [[], []]           # Array of all the enemy textures
-enemyCounts = [12, 4]             # How many enemies there are, for each type
-largeHitboxes = [30, 26, 38, 40]  # Hitbox sizes of large 4x4 enemies
-
-stars = []              # Array of all the stars in the background
-rects = []              # Array of all the rectangles in the lab background
-breakingPlatforms = {}  # Object containing the animation state of activated breaking platforms. The index is the coordinates
+sprites = []                        # Array of all the textures
+groundTiles = []                    # Array of all ground tiles
+backgroundTiles = []                # Array of all background tiles
+spikeTiles = []                     # Array of all spike tiles
+warpBGs = []                        # Array of warp backgrounds
+teleporters = []                    # Array of teleporter frames
+enemySprites = [[], []]             # Array of all the enemy textures
+enemyCounts = [12, 4]               # How many enemies there are, for each type
+largeHitboxes = [32, 30, 38, 28]    # Hitbox sizes of large 4x4 enemies
+stars = []                          # Array of all the stars in the background
+rects = []                          # Array of all the rectangles in the lab background
+breakingPlatforms = {}              # Object containing the animation state of activated breaking platforms. The index is the coordinates
+replaylist = []
 
 cpRoom = ""  # Roomname of last checkpoint, for saving
 area = ""    # Name of area, e.g. "The Space Station"
-
+menutext = medfont.render(' ',1,WHITE)
 # Initial settings
 player = Player()
 bgCol = (0, 0, 0, 0)
@@ -1044,7 +1091,7 @@ menuBGPos = random.randint(0, 2750)   # Shuffle where the menu starts a bit. Bec
 flashing = False
 savedGame = False
 debug = False
-
+levelnum = 0
 savedVelocity = player.velocity  # Save the original player.velocity as it changes when touching a gravity line
 palette = Palette().optimize()
 
@@ -1267,18 +1314,22 @@ def switchdirection(data, w, h, includeSpikes=False):   # Change enemy/platform 
 
 
 def renderHUD():    # Displays time + FPS ingame, plus lots of debug info if F3 is pressed
-    global hudsize
+    global hudsize, framerate, debugtools
     gameTime = str(player.mins) + ":" + str(player.secs).zfill(2)
     if msEnabled: gameTime += "." + str(round(player.frames / 60 * 100)).zfill(2)
+    if debugtools == True:
+        fpsExtension = "(" + str(framerate) + ")"
+    else:
+        fpsExtension = ''
     if hudsize == 3:                                  # Small font
         timer = font.render(gameTime, 1, WHITE)
-        fpsCount = font.render(str(int(clock.get_fps())) + " FPS", 1, WHITE)
+        fpsCount = font.render(str(int(clock.get_fps())) + " FPS" + fpsExtension, 1, WHITE)
     elif hudsize == 2:                                # Medium font
         timer = medfont.render(gameTime, 1, WHITE)
-        fpsCount = medfont.render(str(int(clock.get_fps())) + " FPS", 1, WHITE)
+        fpsCount = medfont.render(str(int(clock.get_fps())) + " FPS" + fpsExtension, 1, WHITE)
     elif hudsize == 1:
         timer = smallfont.render(gameTime, 1, WHITE)  # Render timer
-        fpsCount = smallfont.render(str(int(clock.get_fps())) + " FPS", 1, WHITE)  # Render FPS count
+        fpsCount = smallfont.render(str(int(clock.get_fps())) + " FPS" + fpsExtension, 1, WHITE)  # Render FPS count
     else:
         timer = smallfont.render('', 1, WHITE)
         fpsCount = smallfont.render('', 1, WHITE)
@@ -1311,34 +1362,73 @@ def checksave():    # Load save file
     except FileNotFoundError:
         savedGame = False
 
-
 def buildmenu():    # Builds the main menu
-    global menu, savedGame
+    global menu, savedGame, menutext
     checksave()
-    menu = Menu("menu", ["new game", "continue", "settings", "quit"], 225)
+    menutext = medfont.render(' ',1,WHITE)
+    menu = Menu("menu", ["new game", "continue", "play replay", "settings", "quit"], 225)
     if not savedGame:
         menu.lock(1)    # Disable "continue" option if no saved game
+        
+AllSettings = [      musicvolume,  sfxvolume,  msEnabled,  debugtools,  invincible,  flippyboi,  hudsize,  musicpackSelected]
+AllSettingsNames = ['musicvolume','sfxvolume','msEnabled','debugtools','invincible','flippyboi','hudsize','musicpackSelected']
 
+def getSettings(Name):
+    global AllSettings
+    x = 0
+    while x < len(AllSettingsNames):
+        if AllSettingsNames[x] == Name:
+            return AllSettings[x]
+        x += 1
+                                ##### SAVE THE SETTINGS
+def saveSettings(Name,newValue):
+    global   settings,   musicvolume,  sfxvolume,  msEnabled,  debugtools,  invincible,  flippyboi,  hudsize,  musicpackSelected, AllSettings, AllSettingsNames
+    x = 0
+    while x < len(AllSettingsNames):
+        if AllSettingsNames[x] == Name:
+            if x < 2:
+                AllSettings[x] += newValue
+            else:
+                AllSettings[x] = newValue
+        x += 1  
+    x = 0
+    settings = "[{\n"
+    while x < len(AllSettings):
+        settings += '"' + AllSettingsNames[x]  + '": "' + str(AllSettings[x]) + '"'
+        if x < len(AllSettings) - 1:
+            settings += ',\n'
+        x += 1
+    settings += '}]'
+    
+    with open("settings.vvvvvv", 'w') as s:
+        s.writelines(settings)
 
+    musicvolume = round(AllSettings[0], 1)
+    sfxvolume = round(AllSettings[1], 1)
+    msEnabled = AllSettings[2]
+    debugtools = AllSettings[3]
+    invincible = AllSettings[4]
+    flippyboi = AllSettings[5]
+    hudsize = AllSettings[6]
+    musicpackSelected = AllSettings[7]
 def runMenus():   # Run code depending on what menu option is selected
-    global menu, area, player, ingame, checkpoint, levelFolder, cpRoom, epstein_didnt_kill_himself, volume_slider, sound_slider, msEnabled, debugtools, invincible, flippyboi, hudsize, musicpackSelected, settings
+    global menu,area,player,key,ingame,checkpoint,levelFolder,cpRoom,epstein_didnt_kill_himself,settings,musicpackSelected,levelnum,menutext,replaylist
     option = menu.run()
 
     if menu.name == "pause":    # Pause menu
 
         if debugtools or invincible or flippyboi:
             menu.lock(2)
-        if player.winTimer > 0:
-            menu.lock(1)  # Disable retry during win cutscene
+        if player.winTimer > 0 or player.replay > 0:
+            menu.lock(2)  # Disable retry during win cutscene
 
         if option == 0:
+            player.buffer = -999
             ingame = True   # Unpause
 
-        if option == 1:
-            ingame = True
-            player.die()    # Die and unpause (to retry)
 
-        if option == 2:
+
+        if option == 1:
             sfx_boop.play()     # Save game
             menu.lock(2)
             flash(6)
@@ -1350,7 +1440,11 @@ def runMenus():   # Run code depending on what menu option is selected
             with open("save.vvvvvv", 'w') as data:
                 json.dump(saveJSON, data)
             checksave()
-
+            
+        if option == 2:
+            ingame = True
+            startlevel(levels[levelnum])
+            
         if option == 3:     # Quit stage and return to main menu
             sfx_hurt.play()
             player = Player()
@@ -1371,6 +1465,7 @@ def runMenus():   # Run code depending on what menu option is selected
                     buildmenu()     # Return to main menu upon pressing "back" or escape
                     sfx_menu.play()
                 else:
+                    levelnum = i
                     startlevel(levels[i])   # Start the selected level
 
         # Display high scores in the bottom left corner
@@ -1422,19 +1517,31 @@ def runMenus():   # Run code depending on what menu option is selected
                 player.mins = savedGame["time"][0]
                 player.secs = savedGame["time"][1]
                 player.frames = savedGame["time"][2]
+                player.replay = -1
                 if check[4]: player.flip(True)
                 checkpoint = check
                 cpRoom = room.meta["name"]
                 ingame = True
                 getMusic()
                 sfx_save.play()
+                
         if option == 2:
             sfx_menu.play()
-            menu = Menu("settings", ["audio settings", "video settings", "controls", "gameplay settings", "back"])
-            menu.lock(1)
-            menu.lock(2)
-    # Delete these later ^^^
-        if option == 3:     # Quit
+            replaylist = []
+            for file in os.listdir("replays"):
+                if file.endswith(".replay"):
+                    replaylist.append(file)
+            replaylist.append("back")
+            menu = Menu("replays", replaylist)
+                
+        if menu.selected == 2:
+            screen.blit(menutext, (20, screenSize[1] - 35))
+            
+        if option == 3:
+            sfx_menu.play()
+            menu = Menu("settings", ["audio settings", "controls", "gameplay settings", "back"])
+            
+        if option == 4:     # Quit
             epstein_didnt_kill_himself = False
 
     elif menu.name == "settings":   # All settings [ Audio , Video , Controls, Gameplay ]
@@ -1442,32 +1549,18 @@ def runMenus():   # Run code depending on what menu option is selected
             menu = Menu("audio", ["music volume", "sfx volume", "music packs", "back"])
             sfx_menu.play()
         if option == 1:
-            menu = Menu("video", ["back"])
+            menu = Menu("controls", ["Change flip keys", "Change left keys", "Change right keys", "back"])
+            menu.lock(0)
+            menu.lock(1)
+            menu.lock(2)
             sfx_menu.play()
         if option == 2:
-            menu = Menu("controls", ["back"])
-            sfx_menu.play()
-        if option == 3:
             menu = Menu("gameplay", ["More timer info", "HUD size", "Cheats", "back"])
             sfx_menu.play()
-        if option == 4:
-                                ##### SAVE THE SETTINGS
-            sfx_menu.play()
-            with open("settings.vvvvvv", 'w') as s:
-                settings = ["[{\n",
-                            '"musicvolume": "' +str(volume_slider) + '",\n',
-                            '"sfxvolume": "' +str(sound_slider) + '",\n',
-                            '"musicpack": "' +str(musicpackSelected) + '",\n',
-                            '"msEnabled": "' +str(msEnabled) + '",\n',
-                            '"hudsize": "' +str(hudsize) + '",\n',
-                            '"debugtools": "' +str(debugtools) + '",\n',
-                            '"invincible": "' +str(invincible) + '",\n',
-                            '"flippyboi": "' +str(flippyboi) + '"\n',
-                            '}]']
-                s.writelines(settings)
-                    
+        if option == 3:
+            sfx_menu.play()         
             buildmenu()
-
+            
     elif menu.name == "audio":  # All Audio settings
         if option == 0:
             menu = Menu("musicvolume", ["+","return","-"])
@@ -1479,46 +1572,69 @@ def runMenus():   # Run code depending on what menu option is selected
             menu = Menu("musicpack", ["+","return","-"])
             sfx_menu.play()
         if option == 3:
-            menu = Menu("settings", ["audio settings", "video settings", "controls", "gameplay settings", "back"])
+            menu = Menu("settings", ["audio settings", "controls", "gameplay settings", "back"])
             sfx_menu.play()
-            menu.lock(1)
-            menu.lock(2)
 
+    elif menu.name == "replays":
+        if option < len(replaylist) - 1:
+            sfx_menu.play()
+            try:
+                with open('./replays/' + replaylist[option],"r") as f:
+                    startlevel(levels[int(f.readline())])
+                    player.replay = 1
+                    x = 0
+                    player.inputs = []
+                    player.frameinput = []
+                    while x >= 0:
+                        player.inputs.append(f.readline(4))
+                        try:
+                            player.frameinput.append(int(f.readline()))
+                        except ValueError:
+                            x = -69
+                        # print(x)
+                        # print(self.frameinput[x])
+                        x += 1
+                player.frameinput.append(0)
+            except UnboundLocalError:
+                menutext = medfont.render("An error has occured.. :(", 1, WHITE)
+        if option == len(replaylist) - 1:
+            sfx_menu.play()
+            buildmenu()
+                
     elif menu.name == "musicvolume":    # Music settings
-        vol_str = "{:.0%}".format(volume_slider)
-        volume = font.render(vol_str, 1, (0, 255, 255))
+        vol_str = "{:.0%}".format(getSettings('musicvolume'))
+        volume = font.render(vol_str, 1, CYAN)
         screen.blit(volume, ((screenSize[0] / 2) - (volume.get_width() / 2), 150))
         
-        if option == 0 and volume_slider < 0.95:
+        if option == 0 and musicvolume < 0.95:
             sfx_menu.play()
-            volume_slider += 0.1
+            saveSettings('musicvolume',0.1)
         if option == 1:
             sfx_menu.play()
             menu = Menu("audio", ["music volume", "sfx volume", "music packs", "back"])
-        if option == 2 and volume_slider > 0.05:
+        if option == 2 and musicvolume > 0.05:
             sfx_menu.play()
-            volume_slider -= 0.1
-        volume_slider = round(volume_slider, 1)
+            saveSettings('musicvolume',-0.1)
     
     elif menu.name == "sfxvolume":  # Sound settings
-        vol_str = "{:.0%}".format(sound_slider)
-        volume = font.render(vol_str, 1, (0, 255, 255))
+        vol_str = "{:.0%}".format(getSettings('sfxvolume'))
+        volume = font.render(vol_str, 1, CYAN)
         screen.blit(volume, ((screenSize[0] / 2) - (volume.get_width() / 2), 150))
         
-        if option == 0 and sound_slider < 0.95:
+        if option == 0 and sfxvolume < 0.95:
             sfx_menu.play()
-            sound_slider += 0.1
+            saveSettings('sfxvolume',0.1)
         if option == 1:
             sfx_menu.play()
             menu = Menu("audio", ["music volume", "sfx volume", "music packs", "back"])
-        if option == 2 and sound_slider > 0.05:
+        if option == 2 and sfxvolume > 0.05:
             sfx_menu.play()
-            sound_slider -= 0.1
+            saveSettings('sfxvolume',-0.1)
         updateVolume()
 
     elif menu.name == "musicpack":
         musicSelect = "Music selected: Pack " + str(musicpackSelected)
-        mus = font.render(musicSelect, 1, (0, 255, 255))
+        mus = font.render(musicSelect, 1, CYAN)
         screen.blit(mus, ((screenSize[0] / 2) - (mus.get_width() / 2), 150))
         
         if option == 0:
@@ -1538,6 +1654,29 @@ def runMenus():   # Run code depending on what menu option is selected
             sfx_menu.play()
             getMusic()
 
+    elif menu.name == "controls":  # All control settings
+        if option == 0:
+            menu = Menu("flipkeys", ["Add a key", "Remove a key", "back"])
+            sfx_menu.play()
+        if option == 1:
+            menu = Menu("leftkeys", ["Add a key", "Remove a key", "back"])
+            sfx_menu.play()
+        if option == 2:
+            menu = Menu("rightkeys", ["Add a key", "Remove a key", "back"])
+            sfx_menu.play()
+        if option == 3:
+            menu = Menu("settings", ["audio settings", "controls", "gameplay settings", "back"])
+            sfx_menu.play()
+            
+    elif menu.name == "flipkeys":    # Change controls
+        vol_str = "{:.0%}".format(musicvolume)
+        volume = font.render(vol_str, 1, CYAN)
+        screen.blit(volume, ((screenSize[0] / 2) - (volume.get_width() / 2), 150))
+        if option == 0:
+            key = pendingKey()
+
+        
+        
     elif menu.name == "gameplay":   # All gameplay settings
         renderHUD()
         if menu.selected == 0:
@@ -1549,10 +1688,10 @@ def runMenus():   # Run code depending on what menu option is selected
             screen.blit(temp, (20, screenSize[1] - 35))
         if option == 0 and msEnabled == False:
             sfx_save.play()
-            msEnabled = True
+            saveSettings('msEnabled',True)
         elif option == 0 and msEnabled == True:
             sfx_hurt.play()
-            msEnabled = False
+            saveSettings('msEnabled',False)
         if menu.selected == 2:
             temp = medfont.render("Note: Records aren't saved if cheats are enabled!", 1, WHITE)
             screen.blit(temp, (20, screenSize[1] - 35))
@@ -1564,20 +1703,18 @@ def runMenus():   # Run code depending on what menu option is selected
             menu = Menu("cheats", ["debug tools", "invincibility mode", "flip in midair", "back"])
         if option == 3:
             sfx_menu.play()
-            menu = Menu("settings", ["audio settings", "video settings", "controls", "gameplay settings", "back"])
-            menu.lock(1)
-            menu.lock(2)
+            menu = Menu("settings", ["audio settings", "controls", "gameplay settings", "back"])
 
     elif menu.name == "hudsize": # HUD Size settings
         renderHUD()
         if menu.selected == 0:
-            hudsize = 0
+            saveSettings('hudsize',0)
         if menu.selected == 1:
-            hudsize = 1
+            saveSettings('hudsize',1)
         if menu.selected == 2:
-            hudsize = 2
+            saveSettings('hudsize',2)
         if menu.selected == 3:
-            hudsize = 3
+            saveSettings('hudsize',3)
         if option <= 3:
             menu = Menu("gameplay", ["ms display", "HUD size", "Cheats", "back"])
             sfx_save.play()
@@ -1593,10 +1730,10 @@ def runMenus():   # Run code depending on what menu option is selected
             screen.blit(temp, (20, screenSize[1] - 35))
         if option == 0 and debugtools == False:
             sfx_save.play()
-            debugtools = True
+            saveSettings('debugtools',True)
         elif option == 0 and debugtools == True:
             sfx_hurt.play()
-            debugtools = False
+            saveSettings('debugtools',False)
             
         if menu.selected == 1: # Invincibility Mode
             if invincible == True:
@@ -1607,31 +1744,31 @@ def runMenus():   # Run code depending on what menu option is selected
             screen.blit(temp, (20, screenSize[1] - 35))
         if option == 1 and invincible == False:
             sfx_save.play()
-            invincible = True
+            saveSettings('invincible',True)
         elif option == 1 and invincible == True:
             sfx_hurt.play()
-            invincible = False
+            saveSettings('invincible',False)
             
         if menu.selected == 2: # Infinite Flips
             if flippyboi == True:
-                flip = "Flip 'til your heart's content"
+                flip = "Flip in midair!"
             else:
                 flip = "You regain your flip when you touch the ground"
             temp = medfont.render(flip, 1, WHITE)
             screen.blit(temp, (20, screenSize[1] - 35))
         if option == 2 and flippyboi == False:
             sfx_save.play()
-            flippyboi = True
+            saveSettings('flippyboi',True)
         elif option == 2 and flippyboi == True:
             sfx_hurt.play()
-            flippyboi = False
+            saveSettings('flippyboi',False)
         if option == 3:
             menu = Menu("gameplay", ["ms display","HUD size", "Cheats", "back"])
             sfx_menu.play()
             
-            
+
 def startlevel(levelObj):   # Starts a stage
-    global checkpoint, levelFolder, ingame, player, area, cpRoom
+    global checkpoint, levelFolder, ingame, player, area, cpRoom, fullReplay
     player = Player()   # Create fresh new player
     levelFolder = levelObj["folder"]
     area = levelObj["name"]
@@ -1643,7 +1780,6 @@ def startlevel(levelObj):   # Starts a stage
     ingame = True   # Begin
     sfx_save.play()
     getMusic()
-
 
 for i in range(30):  # Prepare some stars for the normal background
     stars.append([random.randint(25, screenSize[0] - 25), random.randint(0, screenSize[1] - 32), random.randint(0, 50)])
@@ -1672,6 +1808,7 @@ while epstein_didnt_kill_himself:   # Runs every frame @ 60 FPS
         room.checkLines()   # Gravity line collisions and rendering
         room.run()          # Render all textures and run code depending on each object ID
         spawnBGStars()      # Background details, dependent on tileset
+        player.getInput()   # Gets inputs on current frame
         player.exist()      # Player physics and more
         room.renderName(font, screenSize, screen)   # Layer above player
 
@@ -1685,7 +1822,7 @@ while epstein_didnt_kill_himself:   # Runs every frame @ 60 FPS
 
     else:
         runMenus()   # Menus!
-        pygame.mixer.music.set_volume(volume_slider)
+        pygame.mixer.music.set_volume(musicvolume)
     if invincible or debugtools or flippyboi:
         Cheater = font.render('C', 1, RED)  # Render
         screen.blit(Cheater, (screenSize[0] - 30, 10))
@@ -1697,13 +1834,24 @@ while epstein_didnt_kill_himself:   # Runs every frame @ 60 FPS
             if event.key == pygame.K_ESCAPE or event.key == pygame.K_p:
                 if ingame or menu.name == "pause":   # If you're ingame...
                     ingame = not ingame              # Pause/unpause gameplay
-                    menu = Menu("pause", ["continue", "retry", "save", "menu", "quit"], 0, False)   # Build pause menu
+                    menu = Menu("pause", ["continue", "save", "retry", "menu", "quit"], 0, False)   # Build pause menu
             if event.key == pygame.K_F3 and debugtools == True:
                 debug = not debug   # Toggle debug menu upon pressing F3
-            if event.key == pygame.K_k and debugtools == True and framerate > 1:
-                framerate -= 1
+            if event.key == pygame.K_k and debugtools == True:
+                if framerate > 20:
+                    framerate -= 5
+                elif framerate > 10:
+                    framerate -= 2
+                elif framerate > 1:
+                    framerate -= 1
             if event.key == pygame.K_l and debugtools == True:
-                framerate += 1
+                if framerate < 10:
+                    framerate += 1
+                elif framerate < 20:
+                    framerate += 2
+                elif framerate >= 20:
+                    framerate += 5
+
             if event.key == pygame.K_SEMICOLON and debugtools == True:
                 framerate = 60
     if flashing:    # If the flash() function is active, fill the screen with white

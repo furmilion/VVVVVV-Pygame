@@ -83,15 +83,3 @@ KNOWN BUGS:
 + When to the right of a horizontal platform, the platform seems smaller than it should be.
 + Player moves 3 pixels into vertical platform moving upwards, purposefully 
 + Pausing the game in the ending cutscene causes the music fadeout to mess up.
-
-
-New Game: 129014
-Hounds:213
-Hounds:513
-Hounds:413
-Hounds:453
-Hounds:493
-Hounds:495
-Hounds:497
-Hounds:597
-Hounds:897

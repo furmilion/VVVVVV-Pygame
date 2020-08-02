@@ -1,5 +1,9 @@
-import pygame, json, math, random, os
-from pygame.draw import line, rect
+import os
+try:
+    import pygame, json, math, random, os
+    from pygame.draw import line, rect
+except ImportError:
+    os.system('py3 -m pip install pygame')
 from spritesheet import Spritesheet
 from palette import Palette
 
@@ -17,12 +21,13 @@ editorGuide = open("editorGuide.txt", "r")
 editorGuide = editorGuide.read().splitlines()
 
 pygame.init()
-screenSize = [960, 736]
-screen = pygame.display.set_mode(screenSize)
+screenSize = [960, 736] # 1536, 864
+screen = pygame.display.set_mode(screenSize,flags = pygame.RESIZABLE)
 pygame.display.set_caption("VVVVVV Editor")
 pygame.display.set_icon(pygame.image.load("./assets/icon.png"))
 done = False
 menu = False
+typing = False     # Boolean for determining if the player is typing
 clock = pygame.time.Clock()
 bigfont = pygame.font.Font('./assets/PetMe64.ttf', 24)
 medFont = pygame.font.Font('./assets/PetMe64.ttf', 16)
@@ -56,7 +61,7 @@ class Room:
             roomnamex = (screenSize[0] / 2) - (roomname.get_width() / 2)  # Center the room name
             if len(self.meta["name"]):
                 pygame.draw.rect(screen, (0, 0, 0), (0, screenSize[1] - 32, screenSize[0], 32))
-                screen.blit(roomname, (roomnamex, screenSize[1] - 28))  # Render room nomes2
+                screen.blit(roomname, (roomnamex, screenSize[1] - 28))  # Render room names 2
 
 room = Room(levels[0]["startingRoom"])
 lastRoom = [0, 0]
@@ -75,6 +80,7 @@ startPoint = [[], []]
 tile = 0
 brushSize = 1
 specialMode = False
+
 specialID = -1
 bgCol = (0, 0, 0, 0)
 palette = Palette().pal
@@ -277,6 +283,15 @@ def loadsprites():
         img.set_colorkey((0, 0, 0))
         specialSprites.append(img)
 
+def saveLevel():
+    if not os.path.exists(levelFolder):
+        os.makedirs(levelFolder)
+    with open("./" + levelFolder + "/" + roomStr + ".vvvvvv", 'w') as data:
+        leveldata = {"meta": room.meta, "enemies": room.enemies, "warp": room.meta["warp"], "platforms": room.platforms, "lines": room.lines, "tiles": room.tiles}
+        json.dump(leveldata, data)
+        lastRoom = [room.x, room.y]
+        print("✅ Saved to", roomStr + ".vvvvvv!")
+        
 WHITE = grey(255)
 
 loadFolder(levels[0])
@@ -336,7 +351,7 @@ while not done:
     cursor = pygame.mouse.get_pos()
     key = pygame.key.get_pressed()
     mouse = pygame.mouse.get_pressed()
-
+    
     roomStr = str(room.x) + "," + str(room.y)
 
     gridX = math.floor(cursor[0] / 32)
@@ -370,27 +385,45 @@ while not done:
                     specialMode = True
                     tile = specialTiles[gridX][0]
                     specialID = gridX
-
-        if event.type == pygame.KEYDOWN and not menu:
+        if event.type == pygame.KEYDOWN and typing:
+            
+            if event.key == pygame.K_RETURN:
+                print(text)
+                typing = False
+            elif event.key == pygame.K_BACKSPACE:
+                text = text[:-1]
+            else:
+                text += str(event.unicode)
+            room.meta["name"] = text
+                
+        elif event.type == pygame.KEYDOWN and not menu:
 
             for i in range(1, 10): # Eval seems to be the best way to check if *any* function key is pressed
                 if event.key == eval("pygame.K_F" + str(i)) and i <= len(levels):
                     loadFolder(levels[i-1])
-
-            if event.key == pygame.K_RIGHT:
+            if event.key == pygame.K_q:
+                saveLevel()
+                done = True
+            elif event.key == pygame.K_RIGHT:
+                saveLevel()
                 room.x += 1
                 loadroom()
-            if event.key == pygame.K_LEFT:
+            elif event.key == pygame.K_LEFT:
+                saveLevel()
                 room.x -= 1
                 loadroom()
-            if event.key == pygame.K_UP:
+            elif event.key == pygame.K_UP:
+                saveLevel()
                 room.y += 1
                 loadroom()
-            if event.key == pygame.K_DOWN:
+            elif event.key == pygame.K_DOWN:
+                saveLevel()
                 room.y -= 1
                 loadroom()
-
-            if event.key == pygame.K_SPACE:
+            elif event.key == pygame.K_r:
+                typing = True
+                text = ''
+            elif event.key == pygame.K_SPACE:
 
                 def nearsolid(obj, special):
                     return (not special and (obj <= 12 or obj == 51)) or (special and obj == 51)
@@ -441,9 +474,9 @@ while not done:
 
                 for n in newtiles:
                     room.tiles[n] = newtiles[n]
+                
+                    
 
-            if event.key == pygame.K_r:
-                room.meta["name"] = input("Enter new roomname: ")
 
             change = 1
             if shifting: change = 5
@@ -460,14 +493,14 @@ while not done:
                     entityDirection += 1
                     if entityDirection > 3: entityDirection = 0
 
-            else:
+            elif not typing:
                 if event.key == pygame.K_PLUS or event.key == pygame.K_EQUALS:
                     brushSize += change
                 elif event.key == pygame.K_MINUS or event.key == pygame.K_UNDERSCORE:
                     brushSize -= change
                 if brushSize < 1: brushSize = 1
                 if brushSize > 30: brushSize = 30
-
+            
             if event.key == pygame.K_RIGHTBRACKET:
                 size = shifting+0
                 room.meta["enemyType"][size] += 1
@@ -533,13 +566,8 @@ while not done:
                 menu = True
 
             if event.key == pygame.K_s:
-                if not os.path.exists(levelFolder):
-                    os.makedirs(levelFolder)
-                with open("./" + levelFolder + "/" + roomStr + ".vvvvvv", 'w') as data:
-                    leveldata = {"meta": room.meta, "enemies": room.enemies, "warp": room.meta["warp"], "platforms": room.platforms, "lines": room.lines, "tiles": room.tiles}
-                    json.dump(leveldata, data)
-                    lastRoom = [room.x, room.y]
-                    print("✅ Saved to", roomStr + ".vvvvvv!")
+                saveLevel()
+                    
 
         elif event.type == pygame.KEYDOWN and menu:
             menu = False

@@ -1051,12 +1051,13 @@ class Settings:
             if self.AllSettingsNames[x] == Name:
                 if x < 2:
                     self.AllSettings[x] += newValue
+                    self.AllSettings[x] = round(self.AllSettings[x], 1)
                 else:
                     self.AllSettings[x] = newValue
             x += 1
-            #
-        self.musicvolume = round(self.AllSettings[0], 1)
-        self.sfxvolume = round(self.AllSettings[1], 1)
+        #
+        self.musicvolume = self.AllSettings[0]
+        self.sfxvolume = self.AllSettings[1]
         self.msEnabled = self.AllSettings[2]
         self.debugtools = self.AllSettings[3]
         self.invincible = self.AllSettings[4]
@@ -1542,6 +1543,7 @@ def runMenus():   # Run code depending on what menu option is selected
             replaylist = []
             for file in os.listdir("replays"):
                 if file.endswith(".replay"):
+                    file = file.replace(';',':')
                     replaylist.append(file.replace('.replay',''))
             replaylist.append("back")
             menu = Menu("replays", replaylist)
@@ -1575,7 +1577,7 @@ def runMenus():   # Run code depending on what menu option is selected
         if option < len(replaylist) - 1:
             sfx_menu.play()
             try:
-                with open('./replays/' + replaylist[option] + '.replay',"r") as f:
+                with open('./replays/' + replaylist[option].replace(':',';') + '.replay',"r") as f:
                     levelnum = int(f.readline())
                     startlevel(levels[levelnum])
                     

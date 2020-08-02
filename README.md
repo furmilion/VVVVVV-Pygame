@@ -20,7 +20,7 @@ If you want to add a new stage to the game, add a new level object to `levels.vv
 + Adjusted Fall speed (20 -> 16)
 + Adjusted conveyor belt strength (5 -> 4)
 + Fixed clipping issue with floor and ceiling
-+ Added buffer system for non-vertical platforms (how to fix?)
++ Added buffer system for non-vertical platforms
 + Added death animation
 + Polished ending cutscene to be more like VVVVVV's
 + Added more forgiveness with fatal hitboxes in the form of invincibility frames
@@ -34,7 +34,7 @@ If you want to add a new stage to the game, add a new level object to `levels.vv
 + Slightly lowered volume of gravity lines
 + Fixed bug where player doesn't transition smoothly vertically with vertical warping enabled.
 
-### v1.1:
+### v1.1 (Settings):
 
 + Added more menus!
 + Added customizable music packs! 2 packs are currently implemented
@@ -50,7 +50,7 @@ If you want to add a new stage to the game, add a new level object to `levels.vv
 + Adjusted gravity line physics again
 + Can buffer flips off of vertical platforms
 
-### v1.2:
+### v1.2 (More improvements):
 
 + New debug feature! Pressing 'K' and 'L' will allow you to change your max framerate by 1.
 	+ Play the game frame-by-frame! Very useful for figuring out bugs :)
@@ -62,7 +62,8 @@ If you want to add a new stage to the game, add a new level object to `levels.vv
 + Changed conveyor belt physics slightly to prevent clipping fully into walls, conveyor belts are also slightly stronger than before
 + Music pack 2 is now 100% siIvagunner :)
 
-### v1.3:
+### v1.3 (Replays!):
+
 + Added replays! Still very experimental.. Bugs likely!
 + Adjusted previous framerate debugging tool so less K presses are required to get to a low framerate and vice versa
 + Framerate now shows in HUD if debbuging tool is active
@@ -74,12 +75,26 @@ If you want to add a new stage to the game, add a new level object to `levels.vv
 + Fixed a previously unknown bug where going through a warp upwards was slightly faster than downwards
 + Streamlined the settings code to make it more practical. Settings now save immediately after changing instead when going to the main menu
 
+### v1.4 (QOL Changes):
+
++ Changed player physics when turning around at a high speed
++ Debug mode is no longer a cheat and you can save replays with it enabled. (Records are still not saved)
++ Streamlined the setting and replay code even more to allow automatic changing between multiple settings
+	+ Replays now save / load the cheats that were used when they were recorded automatically.
+	+ You can now restart replays from the pause menu.
+	+ Replays have more compact and easy to read filenames.
++ Made platform collision slightly better
++ Fixed bug which caused spikes to kill earlier when infinite flips was enabled.
++ Game now resets the framerate and debug menu when turning debug mode off.
++ You can change roomnames in editor.py without going to the console (type in-game)
++ Organized editor guide. Can press 'q' to close the program.
++ Editor now saves a room automatically upon changing rooms or closing with q. Closing otherwise will NOT save the room.
++ Added a secret. Good luck finding it ;)
+
 KNOWN BUGS:
 + Player "clips" inside walls for 2 frames, can't flip off any of the blocks though
-+ When transitioning to a different room, the name and the player render 1 frame before the room renders
++ When transitioning to a different room, the name renders 1 frame before the room renders
 + Running into a wall with a spike on it may ocassionally kill the player, even though the wall should always take priority
-+ The existence of vertical platforms :/
-+ Will sometimes "snap" if standing on a horizontal platform (???)
-+ When to the right of a horizontal platform, the platform seems smaller than it should be.
++ Will sometimes fall through a horizontal platform (???)
 + Player moves 3 pixels into vertical platform moving upwards, purposefully 
 + Pausing the game in the ending cutscene causes the music fadeout to mess up.

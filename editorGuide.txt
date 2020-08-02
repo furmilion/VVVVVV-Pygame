@@ -1,25 +1,26 @@
-editor guide
+Editor guide ^.^
 
 arrow keys: change room (does not save)
-f1-f12: change area
-S: save room
-
 left click: place object
 right click: delete object
 space: auto-connect tiles (except in warp zone)
+R: change roomname
+W: change warp mode
+S: save room
+f1-f12: change area
+
 +/-: change brush size or entity speed, shift for 5x
 tab: change entity direction
+square brackets: change enemy type
+shift + square brackets: change large enemy type
 backspace: jump to last existing room
-R: change roomname (requires console input)
+Q: quit the editor
 
 1/2: change room color
 3/4: change space station tileset
 5: change to warp zone tileset
 6: change to lab tileset
 tilde: change to grey color
-W: change warp mode
-square brackets: change enemy type
-shift + square brackets: change large enemy type
 
 to add a new stage to game, create a new level object
 inside levels.vvvvvv (follow the format of the others)

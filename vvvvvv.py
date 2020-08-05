@@ -3,6 +3,7 @@ try:
     import pygame, json, math, random, time, os
     from pygame.draw import line, rect
     from datetime import datetime
+    import importlib
 except ImportError:
     os.system('py3 -m pip install pygame')  # Automatically install PyGame
 from spritesheet import Spritesheet   # Saved in another file since it's used elsewhere
@@ -45,12 +46,13 @@ teleSheet = Spritesheet("./assets/teleporters.png")
 enemySheetSmall = Spritesheet("./assets/enemies_small.png")
 enemySheetLarge = Spritesheet("./assets/enemies_large.png")
 
-
 # MISC TEXTURES
 menuBG = pygame.image.load("./assets/menuBG.png").convert()
 levelComplete = pygame.image.load("./assets/levelcomplete.png").convert()
 logo = pygame.image.load("./assets/logo.png").convert_alpha()
 fadeout = pygame.image.load("./assets/fadeout2.png")
+warpBGHor = pygame.image.load("./assets/warpHorizontal.png").convert()
+warpBGVer = pygame.image.load("./assets/warpVertical.png").convert() 
 
 # Pre-render some text since it never changes
 subtitle = font.render("Pygame Edition", 1, CYAN)
@@ -117,7 +119,7 @@ class Player:
         self.winTimer = 0          # How many frames have passed since you beat the level - for timing the win cutscene
         self.textboxBuffer = False # Set to true in ending cutscene to progress to main menu
         self.bufferWindow = 7      # The buffer window for inputting a flip
-        self.buffer = -4140        # ^ timer      
+        self.buffer = -260        # ^ timer (4140     
         self.localTimer = 0        # Timer used for detecting collision
         self.lineTimer = 0         # Timer used for avoiding line collision
         self.flipable = False      # Able to flip directions?
@@ -231,6 +233,13 @@ class Player:
             self.inputValues = [0,0,0,0,(self.frames + self.secs * 60 + self.mins * 3600)]
             if self.winTimer == 1:
                 self.fullReplay.append(self.inputValues.copy())
+    def nani(self): # Secret
+        global checkpointSheet, playerSheet, sfx_save, sfx_hurt
+        playerSheet = Spritesheet("./assets/player(S).png")
+        checkpointSheet = Spritesheet("./assets/checkpoint(S).png")
+        sfx_save = pygame.mixer.Sound("./assets/sounds/hurt.wav")
+        sfx_hurt = pygame.mixer.Sound("./assets/sounds/bang.wav")
+        setting.updateVolume()
     def exist(self):  # Buckle up, this one's a big boy
         global breakingPlatforms, ingame, savedGame, setting, levelnum
         # Gravity line easing
@@ -314,15 +323,8 @@ class Player:
                     if self.coyoteTimer > 4 and self.y % 16 > 0 and self.velocity == savedVelocity:
                         self.y -= 1
                     self.y += self.velocity  # Fall down!
-                if setting.cursedmode:
-                    if self.flipped and (self.coyoteTimer > 11 or (self.inputValues[2] == 0 and self.coyoteTimer > 5)) and self.velocity == savedVelocity:
-                        self.touchedLine = True
                         
             elif self.verticalPlatform[0] == -999:  # If you're NOT touching a vertical platform
-                if setting.cursedmode and self.flipped and self.grounded:
-                    self.flip(True)
-                    self.touchedLine = False
-                    self.y += 16
                 if self.flipped:
                     self.y = math.ceil(self.y / 32) * 32  # Round Y position to nearest 32 if grounded
                 else:
@@ -395,6 +397,7 @@ class Player:
                 self.buffer += 1
                 if self.buffer == -2:
                     sfx_secret.play()
+                    self.nani()
             else:
                 self.buffer = 0
                 
@@ -452,7 +455,6 @@ class Player:
                 oldX, oldY = [room.x, room.y]
                 room.x, room.y, self.x, self.y, spawnFlipped = checkpoint  # Respawn at checkpoint
                 self.x = (math.floor(self.x / 8) * 8) + 10  # Round X position a little
-
                 if [oldX, oldY] != [room.x, room.y]:
                     loadroom(room.x, room.y)    # If checkpoint was in a different room, load it
 
@@ -609,7 +611,7 @@ class Player:
 
 class Room:
     def __init__(self, x=5, y=5):
-        global roomLoadTime, bgCol, breakingPlatforms
+        global bgCol, breakingPlatforms, warpBGs, roomLoadTime
         self.x = x              # X position of room
         self.y = y              # Y position of room
         self.tiles = {}         # Object containing all tiles in the room
@@ -619,7 +621,9 @@ class Room:
         self.meta = {"name": "Outer Space", "color": 0, "tileset": 7, "warp": 0, "enemyType": [1, 1, 1]}    # Metadata
         self.exists = True
         self.platformException = False
-
+        
+        starttime = round(time.time() * 1000)  # Begin room load stopwatch (debug)
+        
         try:  # Attempt to open the room file
             with open("./" + levelFolder + "/" + str(self.x) + "," + str(self.y) + '.vvvvvv', 'r') as lvl:
                 level = json.loads(lvl.read())
@@ -631,49 +635,53 @@ class Room:
         except FileNotFoundError:
             self.exists = False   # Use an empty room if no room file exists
 
-        starttime = round(time.time() * 1000)  # Begin room load stopwatch (debug)
-        switchtileset(self.meta["tileset"])  # Switch tileset
-
-        for i in range(len(sprites)):
-            if i <= 29 or (37 <= i <= 49):
-                self.recolor(sprites[i], self.meta["color"])  # Recolor (most) sprites to selected color
-        for e in enemySprites:
-            for f in e:
-                for g in f:
-                    self.recolor(g, self.meta["color"])  # Recolor enemies
-        for w in warpBGs:
-            self.recolor(w, self.meta["color"])  # Recolor warp background
-        if self.meta["tileset"] == 8:  # Lab tileset
-            bgCol = palette[self.meta["color"]][1][8]  # Recolor lab background
-        else:
-            bgCol = (0, 0, 0, 0)
-
-        roomLoadTime = round(time.time() * 1000) - starttime  # Finish room load stopwatch (milliseconds)
-
-        for num in range(30, 33):  # Flip player sprites if necessary
-            sprites[num] = pygame.transform.flip(sprites[num], not player.facingRight, player.flipped)
-
-        breakingPlatforms = {}  # Reset breaking platforms
-
-
-    def loadEnemies(self):
-        # Prepare Enemy and Platform classes
-        for i in range(len(self.enemies)): self.enemies[i] = Enemy(self.enemies[i])
-        for i in range(len(self.platforms)): self.platforms[i] = Platform(self.platforms[i])
-
-
-    def recolor(self, obj, color):  # Recolors a sprite using palette.png
-        pixels = pygame.PixelArray(obj)  # Get the color of each pixel
         tileset = 0  # Since the palette is split into different tilesets, fetch the correct one
         if self.meta["tileset"] == 8:
             tileset = 1  # Lab
 
         elif self.meta["tileset"] == 7:
             tileset = 2  # Warp Zone
+        warpBGs = []
+        if self.meta["warp"] != 0:
+            warpBGs.append(warpBGVer)
+            warpBGs.append(warpBGHor) 
+        switchtileset(self.meta["tileset"])  # Switch tileset
+        
+        for i in range(len(sprites)):
+            if i <= 29 or (37 <= i <= 49):
+                self.recolor(sprites[i], self.meta["color"], tileset)  # Recolor (most) sprites to selected color
+        for e in enemySprites:
+            for f in e:
+                for g in f:
+                    self.recolor(g, self.meta["color"], tileset)  # Recolor enemies
+        for w in warpBGs:
+            self.recolor(w, self.meta["color"], tileset)  # Recolor warp background
+        if self.meta["tileset"] == 8:  # Lab tileset
+            bgCol = palette[self.meta["color"]][1][8]  # Recolor lab background
+        else:
+            bgCol = (0, 0, 0, 0)
+
+
+
+        for num in range(30, 33):  # Flip player sprites if necessary
+            sprites[num] = pygame.transform.flip(sprites[num], not player.facingRight, player.flipped)
+
+        breakingPlatforms = {}  # Reset breaking platforms
+
+        roomLoadTime = round(time.time() * 1000) - starttime  # Finish room load stopwatch (milliseconds)
+        
+    def loadEnemies(self):
+        # Prepare Enemy and Platform classes
+        for i in range(len(self.enemies)): self.enemies[i] = Enemy(self.enemies[i])
+        for i in range(len(self.platforms)): self.platforms[i] = Platform(self.platforms[i])
+
+
+    def recolor(self, obj, color, tileset):  # Recolors a sprite using palette.png
+        pixels = pygame.PixelArray(obj)  # Get the color of each pixel
+
         for (x, col) in enumerate(palette[0][tileset]):  # For each GREY color in the palette (top row)
             newcol = palette[color][tileset][x]  # Choose the new palette row (color)
             pixels.replace((col[1], col[2], col[3]), (newcol[1], newcol[2], newcol[3]))  # Replace grey with color
-        del pixels  # Delete the pixel array to 'unlock' the sprite for usage
 
 
     def renderBG(self):
@@ -752,7 +760,9 @@ class Room:
 
 
     def run(self):
-        global conveyorTimer
+        if globalTimer > 1 and globalTimer < 3 + self.meta["warp"]:
+            # print('hey')
+            reparseSpritesheets(globalTimer - 2)
         for z in range(3):
             for i in self.tiles:  # For each object in the screen...
                 tileX, tileY, tileZ = parsecoords(i)
@@ -1028,42 +1038,45 @@ class Settings:
     def __init__(self):
         
         # settings.vvvvvv is a JSON file which stores the settings of your game when you quit.
-        with open("settings.vvvvvv", 'r') as s:
-            settings = json.loads(s.read())
-            for saved in settings:
-                self.musicvolume = float(saved["musicvolume"])  # Volume for music
-                self.sfxvolume = float(saved["sfxvolume"])     # Volume for sound effects
-                self.musicpackSelected = int(saved["musicpackSelected"])  # Which music pack is selected?
-                self.msEnabled = str2bool(saved["msEnabled"])     # Extra timer info?
-                self.debugtools = str2bool(saved["debugtools"])   # Debug tools enabled?
-                self.invincible = str2bool(saved["invincible"])   # Invincibility enabled?
-                self.flippyboi = str2bool(saved["flippyboi"])     # Infinite flips enabled?
-                self.cursedmode = 0   # Is Viridian unable to flip?
-                self.hudsize = int(saved["hudsize"])              # 0 is none, 1 is small, 2 is medium, 3 is large
-                
-        self.AllSettings = [self.musicvolume, self.sfxvolume, self.msEnabled, self.debugtools, self.invincible, self.flippyboi, self.hudsize, self.musicpackSelected]
-        self.AllSettingsNames = ['musicvolume','sfxvolume','msEnabled','debugtools','invincible','flippyboi','hudsize','musicpackSelected']                
+        try:
+            with open("settings.vvvvvv", 'r') as s:
+                settings = json.loads(s.read())
+                for saved in settings:
+                    self.musicvolume = float(saved["musicvolume"])  # Volume for music
+                    self.sfxvolume = float(saved["sfxvolume"])     # Volume for sound effects
+                    self.musicpackSelected = int(saved["musicpackSelected"])  # Which music pack is selected?
+                    self.msEnabled = str2bool(saved["msEnabled"])     # Extra timer info?
+                    self.debugtools = str2bool(saved["debugtools"])   # Debug tools enabled?
+                    self.invincible = str2bool(saved["invincible"])   # Invincibility enabled?
+                    self.flippyboi = str2bool(saved["flippyboi"])     # Infinite flips enabled?
+                    self.hudsize = int(saved["hudsize"])              # 0 is none, 1 is small, 2 is medium, 3 is large
+                    self.fullscreen = str2bool(saved["fullscreen"])   # Fullscreen enabled?
+                    self.AllSettings = [self.musicvolume, self.sfxvolume, self.musicpackSelected, self.msEnabled, self.debugtools, self.invincible, self.flippyboi, self.hudsize, self.fullscreen]
+        except:
+            self.AllSettings = [0.5,0.5,1,False,False,False,False,1,False]
+        
+        self.AllSettingsNames = ['musicvolume','sfxvolume','musicpackSelected','msEnabled','debugtools','invincible','flippyboi','hudsize','fullscreen']                
                                 # Save the settings
-                                
     def save(self,Name,newValue):
         x = 0
         while x < len(self.AllSettingsNames):
             if self.AllSettingsNames[x] == Name:
                 if x < 2:
                     self.AllSettings[x] += newValue
-                    self.AllSettings[x] = round(self.AllSettings[x], 1)
+                    round(self.AllSettings[x], 1)
                 else:
                     self.AllSettings[x] = newValue
             x += 1
-        #
-        self.musicvolume = self.AllSettings[0]
-        self.sfxvolume = self.AllSettings[1]
-        self.msEnabled = self.AllSettings[2]
-        self.debugtools = self.AllSettings[3]
-        self.invincible = self.AllSettings[4]
-        self.flippyboi = self.AllSettings[5]
-        self.hudsize = self.AllSettings[6]
-        self.musicpackSelected = self.AllSettings[7]
+        
+        self.musicvolume = round(self.AllSettings[0], 1)
+        self.sfxvolume = round(self.AllSettings[1], 1)
+        self.musicpackSelected = self.AllSettings[2]
+        self.msEnabled = self.AllSettings[3]
+        self.debugtools = self.AllSettings[4]
+        self.invincible = self.AllSettings[5]
+        self.flippyboi = self.AllSettings[6]
+        self.hudsize = self.AllSettings[7]
+        self.fullscreen = self.AllSettings[8]
         
         x = 0
         settings = "[{\n"
@@ -1100,7 +1113,10 @@ player = Player()
 setting = Settings()
 bgCol = (0, 0, 0, 0)
 
+setting.save('',0)
 setting.updateVolume()
+if setting.fullscreen:
+    e = pygame.display.set_mode(screenSize, flags = pygame.HWSURFACE|pygame.FULLSCREEN)
 
 sprites = []                        # Array of all the textures
 groundTiles = []                    # Array of all ground tiles
@@ -1171,11 +1187,12 @@ def appendeach(arr, addto):   # Adds each element of list A to list B
 
 
 def newroom(change, newPos, warpType):    # Change room relative to current one and set new position
-    global player, room
+    global player, room, globalTimer
     player.x = newPos[0]
     player.y = newPos[1]
     if room.meta["warp"] != warpType and player.winTimer == 0:
         globalTimer = 0
+        reparseSpritesheets(0)
         loadroom(room.x + change[0], room.y + change[1])
 
 
@@ -1197,26 +1214,50 @@ def spawnBGStars():
             elif type == 4:
                 rects.append([random.randint(0, screenSize[0]), -50, 4])
 
+def reparseSpritesheets(warp):
+    global enemySprites, groundTiles, backgroundTiles, spikeTiles, warpBGHor, warpBGVer
 
+    groundTiles = tileSheet.split(32, 32, 13, 32, 9, True)
+    backgroundTiles = backgroundSheet.split(32, 32, 13, 32, 3, True)
+    spikeTiles = spikeSheet.split(32, 32, 4, 32, 2)
+    if warp == 1:
+        warpBGHor = pygame.image.load("./assets/warpHorizontal.png").convert()
+##    elif warp == 2:
+        warpBGVer = pygame.image.load("./assets/warpVertical.png").convert() 
 def switchtileset(row):  # Switches the currently loaded tileset. Runs on every room change
 
     # Start by loading sprites and adding to sprites array. Has to be done every room since textures and colors change
     # Sprites are reloaded each room so that they are reverted to their grey state and can be recolored
     # Because of how Pygame handles 'edited' textures, we unfortunately need to re-parse the spritesheets every load
 
-    global sprites, groundTiles, backgroundTiles, spikeTiles, enemySprites, warpBGs
-    sprites, warpBGs = [[], []]
-    enemySprites = [[], []]
+    global sprites, groundTiles, backgroundTiles, spikeTiles, enemySprites
+    sprites = []
+    
+    
+    enemySprites[0] = enemySheetSmall.split(64, 64, 4, 64, enemyCounts[0])  # Append 2x2 enemies
+    enemySprites[1] = enemySheetLarge.split(128, 128, 4, 128, enemyCounts[1])  # Append 4x4 enemies
+    
+                    # Which row of background tiles to use
+                    
+    if row == 8:    # Lab tileset
+        bg = 1
+    elif row == 7:  # Warp Zone tileset
+        bg = 2
+    else:
+        bg = 0
+    for i in range(13):
+        sprites.append(groundTiles[row][i])  # Switch the ground tileset
+    for i in range(13):
+        sprites.append(backgroundTiles[bg][i])  # Switch the background tileset
+    if bg == 1:
+        for i in range(4):
+            sprites.append(spikeTiles[1][i])  # Retexture spikes to second row of the spritesheet
 
-    groundTiles = tileSheet.split(32, 32, 13, 32, 9, True)
-    backgroundTiles = backgroundSheet.split(32, 32, 13, 32, 3, True)
-    spikeTiles = spikeSheet.split(32, 32, 4, 32, 2)
 
     #  READ SPRITES.TXT FOR THE INDEX OF EACH OBJECT IN THE SPRITE ARRAY
     #  This probably isn't the ideal way of handling sprites, I was just inspired by how old SNES games do it
-
-    appendeach([0] * 26, sprites)  # Leave space for the ground/background tiles. These are added later
-    appendeach(spikeTiles[0], sprites)  # Append spikes to 26-29. Assume regular tileset
+    else:
+        appendeach(spikeTiles[0], sprites)  # Append spikes to 26-29. Assume regular tileset
     appendeach(playerSheet.split(player.width-2, player.height, 3), sprites)  # Append player sprites to 30-32
     appendeach(checkpointSheet.split(64, 64, 4), sprites)  # Append checkpoint sprites to 33-36
     appendeach(platformSheet.split(128, 32, 5), sprites)  # Append platforms to 37-41
@@ -1224,25 +1265,14 @@ def switchtileset(row):  # Switches the currently loaded tileset. Runs on every 
     appendeach([0, 0], sprites)   # Editor-only objects, so here's an empty value
     appendeach(teleSheet.split(384, 384, 5), sprites)
 
-    appendeach(warpSheet.split(1024, 704, 2), warpBGs)  # Append warp background to its own array
 
-    enemySprites[0] = enemySheetSmall.split(64, 64, 4, 64, enemyCounts[0])  # Append 2x2 enemies
-    enemySprites[1] = enemySheetLarge.split(128, 128, 4, 128, enemyCounts[1])  # Append 4x4 enemies
 
-    bg = 0  # Which row of background tiles to use
-    if row == 8:  # Lab tileset
-        bg = 1
-        for i in range(4):
-            sprites[i + 26] = spikeTiles[1][i]  # Retexture spikes to second row of the spritesheet
-    if row == 7:  # Warp Zone tileset
-        bg = 2
-    for i in range(13):
-        sprites[i] = groundTiles[row][i]  # Switch the ground tileset
-        sprites[i + 13] = backgroundTiles[bg][i]  # Switch the background tileset
+
 
 
 def loadroom(rx, ry):  # Changes the current room
-    global room
+    global room, globalTimer
+    globalTimer = 0
     room = Room(rx, ry)
     room.loadEnemies()
 
@@ -1408,10 +1438,12 @@ def checksave():    # Load save file
         savedGame = False
 
 def buildmenu():    # Builds the main menu
-    global menu, savedGame, menutext, setting
+    global menu, savedGame, menutext, setting, globalTimer
+    globalTimer = 0
     checksave()
+    reparseSpritesheets(0)
     menutext = medfont.render(' ',1,WHITE)
-    menu = Menu("menu", ["new game", "continue", "play replay", "settings", "quit"], 225)
+    menu = Menu("menu", ["new game", "continue", "play replay", "level editor", "settings", "quit"], 225)
     del setting
     setting = Settings()
     if not savedGame:
@@ -1423,16 +1455,18 @@ def runMenus():   # Run code depending on what menu option is selected
 
     if menu.name == "pause":    # Pause menu
 
-        if setting.debugtools or setting.invincible or setting.flippyboi or player.winTimer > 0:
-            menu.lock(2)  # Disable retry when cheating or in a cutscene.
-
+        if setting.debugtools or setting.invincible or setting.flippyboi:
+            menu.lock(1)  # Disable saving when cheating.
+        if player.winTimer > 0:
+            menu.lock(2)  # Disable retry when in a cutscene.
+        
         if option == 0:
             player.buffer = -999
             ingame = True   # Unpause
 
         if option == 1:
             sfx_boop.play()     # Save game
-            menu.lock(2)
+            menu.lock(1)
             flash(6)
             checkpoint[4] += 0  # Convert bool to number since JSON uses lowercase true/false
             levelIndex = 0
@@ -1493,9 +1527,8 @@ def runMenus():   # Run code depending on what menu option is selected
             screen.blit(leastDeathMsg, (20, screenSize[1] - 35))
 
     elif menu.name == "menu":
-        ms = "v1.4"
-        temp = medfont.render(ms, -1, pygame.Color(85, 85, 125))
-        screen.blit(temp, (20, screenSize[1] - 35))
+        
+            
         # Display + center the logo and subtitle
         screen.blit(logo, ((screenSize[0] / 2) - (logo.get_width() / 2), 125))
         screen.blit(subtitle, ((screenSize[0] / 2) - (subtitle.get_width() / 2), 225))
@@ -1507,7 +1540,7 @@ def runMenus():   # Run code depending on what menu option is selected
                 levelList.append(i["name"].lower().replace("the ", ""))
             levelList.append("back")
             menu = Menu("levels", levelList, 100)
-
+        version = "v1.5"     # Display the version number only if continue isn't selected.
         if savedGame:   # If you have a saved game and "continue" is pressed, pick up from where you left off
             savedStage = levels[savedGame["stage"]]
             if menu.selected == 1:  # Display some info about your saved game when hovering over
@@ -1517,7 +1550,9 @@ def runMenus():   # Run code depending on what menu option is selected
                 saveInfo += " (" + str(savedGame["time"][0]) + ":" + str(savedGame["time"][1]).zfill(2) + ")"
                 saveMsg = medfont.render(saveInfo, 1, WHITE)
                 screen.blit(saveMsg, (20, screenSize[1] - 35))
-
+            else:
+                temp = medfont.render(version, -1, pygame.Color(85, 85, 125))
+                screen.blit(temp, (20, screenSize[1] - 35))
             if option == 1:     # Load your saved game using the details in save.vvvvvv
                 check = savedGame["checkpoint"]
                 area = savedStage["name"]
@@ -1537,7 +1572,9 @@ def runMenus():   # Run code depending on what menu option is selected
                 ingame = True
                 getMusic()
                 sfx_save.play()
-                
+        else:
+                temp = medfont.render(version, -1, pygame.Color(85, 85, 125))
+                screen.blit(temp, (20, screenSize[1] - 35))            
         if option == 2:
             sfx_menu.play()
             replaylist = []
@@ -1550,28 +1587,18 @@ def runMenus():   # Run code depending on what menu option is selected
                 
         if menu.selected == 2:
             screen.blit(menutext, (20, screenSize[1] - 35))
-            
         if option == 3:
-            sfx_menu.play()
-            menu = Menu("settings", ["audio settings", "controls", "gameplay settings", "back"])
-            
-        if option == 4:     # Quit
-            epstein_didnt_kill_himself = False
+            import editor
+            # editor = importlib.reload(editor)
+            importlib.invalidate_caches()
+            importlib.reload(editor)
 
-    elif menu.name == "settings":   # All settings [ Audio , Video , Controls, Gameplay ]
-        if option == 0:
-            menu = Menu("audio", ["music volume", "sfx volume", "music packs", "back"])
+        if option == 4:
             sfx_menu.play()
-        if option == 1:
-            #menu = Menu("editor", ["Change flip keys", "Change left keys", "Change right keys", "back"])
-            #prog = subprocess.Popen(['python', 'editor16x9.py'])
-            sfx_menu.play()
-        if option == 2:
-            menu = Menu("gameplay", ["More timer info", "HUD size", "Cheats", "back"])
-            sfx_menu.play()
-        if option == 3:
-            sfx_menu.play()         
-            buildmenu()
+            setting.save('',0)
+            menu = Menu("settings", ["audio settings", "video settings", "gameplay settings", "back"])
+        if option == 5:     # Quit
+            epstein_didnt_kill_himself = False
 
     elif menu.name == "replays":  # Replay settings
         if option < len(replaylist) - 1:
@@ -1602,7 +1629,23 @@ def runMenus():   # Run code depending on what menu option is selected
             sfx_menu.play()
             buildmenu()
             
-    elif menu.name == "audio":  # All Audio settings
+    elif menu.name == "settings":   # All settings [ Audio , Video, Gameplay ]
+        if option == 0:
+            menu = Menu("audio", ["music volume", "sfx volume", "music packs", "back"])
+            sfx_menu.play()
+        if option == 1:
+            menu = Menu("video", ["Toggle fullscreen", "back"])
+            #prog = subprocess.Popen(['python', 'editor16x9.py'])
+            
+            sfx_menu.play()
+        if option == 2:
+            menu = Menu("gameplay", ["More timer info", "HUD size", "Cheats", "back"])
+            sfx_menu.play()
+        if option == 3:
+            sfx_menu.play()         
+            buildmenu()
+
+    elif menu.name == "audio":  # All Audio settings --------
         if option == 0:
             menu = Menu("musicvolume", ["+","return","-"])
             sfx_menu.play()
@@ -1613,7 +1656,7 @@ def runMenus():   # Run code depending on what menu option is selected
             menu = Menu("musicpack", ["+","return","-"])
             sfx_menu.play()
         if option == 3:
-            menu = Menu("settings", ["audio settings", "controls", "gameplay settings", "back"])
+            menu = Menu("settings", ["audio settings", "video settings", "gameplay settings", "back"])
             sfx_menu.play()
 
                 
@@ -1668,9 +1711,21 @@ def runMenus():   # Run code depending on what menu option is selected
             except pygame.error: setting.musicpackSelected += 1
             setting.save('musicpackSelected',setting.musicpackSelected - 1)
             sfx_menu.play()
-            getMusic()        
-        
-    elif menu.name == "gameplay":   # All gameplay settings
+            getMusic()
+
+    elif menu.name == "video":      # All video settings -------
+        if option == 0:
+            sfx_menu.play()
+            if setting.fullscreen:
+                e = pygame.display.set_mode(screenSize)
+                setting.save('fullscreen',False)
+            else:
+                e = pygame.display.set_mode(screenSize, flags = pygame.FULLSCREEN|pygame.HWSURFACE)
+                setting.save('fullscreen',True)
+        if option == 1:
+            sfx_menu.play()
+            menu = Menu("settings", ["audio settings", "video settings", "gameplay settings", "back"])            
+    elif menu.name == "gameplay":   # All gameplay settings -----
         renderHUD()
         if menu.selected == 0:
             if setting.msEnabled:
@@ -1696,7 +1751,7 @@ def runMenus():   # Run code depending on what menu option is selected
             menu = Menu("cheats", ["debug tools", "invincibility mode", "flip in midair", "back"])
         if option == 3:
             sfx_menu.play()
-            menu = Menu("settings", ["audio settings", "controls", "gameplay settings", "back"])
+            menu = Menu("settings", ["audio settings", "video settings", "gameplay settings", "back"])
 
     elif menu.name == "hudsize": # HUD Size settings
         renderHUD()
@@ -1762,6 +1817,7 @@ def runMenus():   # Run code depending on what menu option is selected
 
 def startlevel(levelObj):   # Starts a stage
     global checkpoint, levelFolder, ingame, player, area, cpRoom, fullReplay
+    reparseSpritesheets(0)
     player = Player()   # Create fresh new player
     levelFolder = levelObj["folder"]
     area = levelObj["name"]
@@ -1814,7 +1870,12 @@ while epstein_didnt_kill_himself:   # Runs every frame @ 60 FPS
 
     else:
         runMenus()   # Menus!
-        pygame.mixer.music.set_volume(setting.musicvolume)
+        try:
+            pygame.mixer.music.set_volume(setting.musicvolume)
+        except pygame.error:
+            print('Something went wrong when switching to the main game from the editor')
+            
+            framerate = 60  # In Frames per seconds.
 
         if setting.invincible or setting.flippyboi:
             Cheater = font.render('C', 1, RED)
@@ -1867,4 +1928,3 @@ while epstein_didnt_kill_himself:   # Runs every frame @ 60 FPS
     clock.tick(framerate)  # 60 FPS
 
 pygame.quit()   # Adios!
-# 1879

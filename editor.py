@@ -2,10 +2,12 @@ import os
 try:
     import pygame, json, math, random, os
     from pygame.draw import line, rect
+    from importlib import reload
 except ImportError:
     os.system('py3 -m pip install pygame')
 from spritesheet import Spritesheet
 from palette import Palette
+from multiprocessing import Pool
 
 with open('./assets/editorTiles.vvvvvv', 'r') as et:
     specialTiles = json.loads(et.read())
@@ -22,16 +24,21 @@ editorGuide = editorGuide.read().splitlines()
 
 pygame.init()
 screenSize = [960, 736] # 1536, 864
-screen = pygame.display.set_mode(screenSize,flags = pygame.RESIZABLE)
+screen = pygame.display.set_mode(screenSize)
 pygame.display.set_caption("VVVVVV Editor")
 pygame.display.set_icon(pygame.image.load("./assets/icon.png"))
 done = False
 menu = False
 typing = False     # Boolean for determining if the player is typing
+fastdelete = False
+typingTime = 0
 clock = pygame.time.Clock()
 bigfont = pygame.font.Font('./assets/PetMe64.ttf', 24)
 medFont = pygame.font.Font('./assets/PetMe64.ttf', 16)
 font = pygame.font.Font('./assets/PetMe64.ttf', 12)
+
+def str2bool(v):    # Python can't convert strings to booleans. "Fine I'll do it myself"
+  return v.lower() in ("true", "t", "1", "1\n", "true\n")
 
 class Room:
     def __init__(self, pos):
@@ -54,14 +61,33 @@ class Room:
                 self.meta = level["meta"]
         except FileNotFoundError:
             self.exists = False
+                
+class Settings:
+                                # Initialize settings on startup.
+    def __init__(self):
+        
+        # settings.vvvvvv is a JSON file which stores the settings of your game when you quit.
+        try:
+            with open("settings.vvvvvv", 'r') as s:
+                settings = json.loads(s.read())
+                for saved in settings:
+                    self.musicvolume = float(saved["musicvolume"])  # Volume for music
+                    self.sfxvolume = float(saved["sfxvolume"])     # Volume for sound effects
+                    self.musicpackSelected = int(saved["musicpackSelected"])  # Which music pack is selected?
+                    self.msEnabled = str2bool(saved["msEnabled"])     # Extra timer info?
+                    self.debugtools = str2bool(saved["debugtools"])   # Debug tools enabled?
+                    self.invincible = str2bool(saved["invincible"])   # Invincibility enabled?
+                    self.flippyboi = str2bool(saved["flippyboi"])     # Infinite flips enabled?
+                    self.hudsize = int(saved["hudsize"])              # 0 is none, 1 is small, 2 is medium, 3 is large
+                    self.fullscreen = str2bool(saved["fullscreen"])   # Fullscreen enabled?
+                    self.AllSettings = [self.musicvolume, self.sfxvolume, self.musicpackSelected, self.msEnabled, self.debugtools, self.invincible, self.flippyboi, self.hudsize, self.fullscreen]
+        except:
+            self.AllSettings = [0.5,0.5,1,False,False,False,False,1,False]
 
-    def renderName(self, font, screenSize, screen):
-        if len(self.meta["name"]):
-            roomname = font.render(self.meta["name"], 1, (255, 255, 255))  # Render room name
-            roomnamex = (screenSize[0] / 2) - (roomname.get_width() / 2)  # Center the room name
-            if len(self.meta["name"]):
-                pygame.draw.rect(screen, (0, 0, 0), (0, screenSize[1] - 32, screenSize[0], 32))
-                screen.blit(roomname, (roomnamex, screenSize[1] - 28))  # Render room names 2
+setting = Settings()
+
+if setting.fullscreen:
+    e = pygame.display.set_mode(screenSize, flags = pygame.HWSURFACE|pygame.FULLSCREEN)
 
 room = Room(levels[0]["startingRoom"])
 lastRoom = [0, 0]
@@ -295,9 +321,9 @@ def saveLevel():
 WHITE = grey(255)
 
 loadFolder(levels[0])
-
+roomTimer = 0
 while not done:
-
+    roomTimer += 1
     screen.fill((bgCol[1], bgCol[2], bgCol[3]))
 
     if room.meta["warp"]:
@@ -341,11 +367,18 @@ while not done:
         i *= 32 
         line(screen, gridCol, (0, i), (screenSize[0], i), 2)
 
-    if len(room.meta["name"]):
-        roomname = bigfont.render(room.meta["name"], 1, grey(255))
+    if len(room.meta["name"]) > 0:
+        underscore = ' '
+        if typing:
+            if roomTimer % 60 < 30:
+                underscore = '_'
+        roomname = bigfont.render(room.meta["name"] + underscore, 1, grey(255))
         roomNameX = (screenSize[0] / 2) - (roomname.get_width() / 2)
         screen.blit(roomname, (roomNameX, screenSize[1] - 122))  # Render room nome
-
+    else:
+        roomname = bigfont.render('<Enter Name>', 1, grey(255))
+        roomNameX = (screenSize[0] / 2) - (roomname.get_width() / 2)
+        screen.blit(roomname, (roomNameX, screenSize[1] - 122))  # Render room nome
     #######################################
 
     cursor = pygame.mouse.get_pos()
@@ -355,7 +388,6 @@ while not done:
     roomStr = str(room.x) + "," + str(room.y)
 
     gridX = math.floor(cursor[0] / 32)
-    gridY = math.floor(cursor[1] / 32)
     gridY = math.floor(cursor[1] / 32)
     legal = gridY < 20
     picker = gridY == 21
@@ -373,7 +405,6 @@ while not done:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             done = True
-
         shifting = key[pygame.K_LSHIFT] or key[pygame.K_RSHIFT]
 
         if event.type == pygame.MOUSEBUTTONDOWN and not menu:
@@ -385,44 +416,69 @@ while not done:
                     specialMode = True
                     tile = specialTiles[gridX][0]
                     specialID = gridX
-        if event.type == pygame.KEYDOWN and typing:
-            
+                    
+        if event.type == pygame.KEYDOWN and typing:     # Typing on screen, includes fast-typing and fast-deleting by holding the button.
+            typingTime = roomTimer
             if event.key == pygame.K_RETURN:
                 print(text)
                 typing = False
             elif event.key == pygame.K_BACKSPACE:
+                fastdelete = True
+                addkey = ''
                 text = text[:-1]
-            else:
-                text += str(event.unicode)
+            elif len(room.meta["name"]) < 41:
+                addkey = str(event.unicode)
+                text += addkey
             room.meta["name"] = text
+            
+        elif event.type == pygame.KEYUP and typing:
+            fastdelete = False
+            typingTime = -1
+            print(typingTime)
+
                 
         elif event.type == pygame.KEYDOWN and not menu:
 
             for i in range(1, 10): # Eval seems to be the best way to check if *any* function key is pressed
                 if event.key == eval("pygame.K_F" + str(i)) and i <= len(levels):
                     loadFolder(levels[i-1])
-            if event.key == pygame.K_q:
+            if event.key == pygame.K_q or event.key == pygame.K_ESCAPE:
+                from vvvvvv import buildmenu
                 saveLevel()
                 done = True
+                p = Pool(1)
+                with p:
+                    screen = pygame.display.quit()
+                    pygame.display.set_caption("VVVVVV Script handler")
+                    pygame.display.set_icon(pygame.image.load("./assets/icon.png"))
+                    p.map(buildmenu, [0,1])
             elif event.key == pygame.K_RIGHT:
-                saveLevel()
+                if roomTimer > 120:
+                    saveLevel()
+                roomTimer = 0
                 room.x += 1
                 loadroom()
             elif event.key == pygame.K_LEFT:
-                saveLevel()
+                if roomTimer > 120:
+                    saveLevel()
+                roomTimer = 0
                 room.x -= 1
                 loadroom()
             elif event.key == pygame.K_UP:
-                saveLevel()
+                if roomTimer > 120:
+                    saveLevel()
+                roomTimer = 0
                 room.y += 1
                 loadroom()
             elif event.key == pygame.K_DOWN:
-                saveLevel()
+                if roomTimer > 120:
+                    saveLevel()
+                roomTimer = 0
                 room.y -= 1
                 loadroom()
             elif event.key == pygame.K_r:
                 typing = True
-                text = ''
+                text = room.meta["name"]
             elif event.key == pygame.K_SPACE:
 
                 def nearsolid(obj, special):
@@ -562,7 +618,7 @@ while not done:
                     room.x, room.y = lastRoom
                     loadroom()
 
-            if event.key == pygame.K_ESCAPE or event.key == pygame.K_SLASH or event.key == pygame.K_QUESTION:
+            if event.key == pygame.K_h or event.key == pygame.K_SLASH or event.key == pygame.K_QUESTION:
                 menu = True
 
             if event.key == pygame.K_s:
@@ -571,7 +627,9 @@ while not done:
 
         elif event.type == pygame.KEYDOWN and menu:
             menu = False
+            
 
+            
         if mouse[0] and legal and not menu:
             if not specialMode:
                 draw(tile, [gridX, gridY])
@@ -631,6 +689,13 @@ while not done:
                     if (x[3] and x[0]-16 == gridX*32 and x[1] == gridY*32) or (not x[3] and x[0] == gridX*32 and x[1]-16 == gridY*32):
                         del room.lines[y]
 
+    if typingTime + 25 < roomTimer and typingTime > 0 and typing: # Part 2 of the typing code
+        if roomTimer % 4 == 0 and fastdelete == True:
+            text = text[:-1]            
+        elif roomTimer % 5 == 0:
+            text += addkey
+        room.meta["name"] = text
+        print('5 frames')
     if menu:
         rect(screen, grey(0), (0, 0, screenSize[0], screenSize[1]), 0)
         pos = 10
@@ -656,7 +721,7 @@ while not done:
         if picker or specialPicker:
             rect(screen, WHITE, (gridX * 32, gridY * 32, 32, 32), 5)
 
-        helpText = font.render("Press ESC to open the editor guide", 1, (255, 255, 255))
+        helpText = font.render("Press H to open the editor guide", 1, (255, 255, 255))
 
         if specialMode:
             helpText = font.render(specialTiles[specialID][3], 1, (255, 255, 255))

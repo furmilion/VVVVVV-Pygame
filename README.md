@@ -90,8 +90,26 @@ If you have problems with Pygame, install Pygame by typing `python -m pip instal
 + Editor now saves a room automatically upon changing rooms or closing with q. Closing otherwise will NOT save the room.
 + Added a secret. Good luck finding it ;)
 
+### v1.5 (Performance update):
+
++ You can toggle Fullscreen mode in-game
++ If settings.vvvvvv is outdated or missing, game will reset settings and proceed as normal.
++ You can launch the editor from the main game
++ Decreased load time of rooms by optimizing the way sprites are re-parsed.
+	+ Space station (~33% faster)
+	+ Lab (~40% faster)
+	+ Warp zone (~10% faster)
++ You can now close the editor with q or Escape. Opening the guide is now done with h.
++ Improved typing in the editor
++ The version number hides if the continue option is shown
++ Fixed bug where you could save when cheating, but not retry :(
++ Made the secret easier to find
+
+### v1.6 (16:9 Paradigm):
+
++
 KNOWN BUGS:
-+ Player "clips" inside walls for 2 frames, can't flip off any of the blocks though
++ Player "clips" inside walls sometimes, can't flip off any of the blocks though
 + When transitioning to a different room, the name renders 1 frame before the room renders
 + Running into a wall with a spike on it may ocassionally kill the player, even though the wall should always take priority
 + Will sometimes fall through a horizontal platform (???)

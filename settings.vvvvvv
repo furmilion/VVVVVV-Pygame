@@ -1,9 +1,10 @@
 [{
-"musicvolume": "0.3",
+"musicvolume": "0.4",
 "sfxvolume": "0.5",
-"msEnabled": "True",
+"musicpackSelected": "1",
+"msEnabled": "False",
 "debugtools": "False",
 "invincible": "False",
 "flippyboi": "False",
-"hudsize": "3",
-"musicpackSelected": "2"}]
+"hudsize": "1",
+"fullscreen": "False"}]

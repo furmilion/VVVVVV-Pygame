@@ -6,10 +6,11 @@ If you want to add a new stage to the game, add a new level object to `levels.vv
 
 ## How do I run this?
 1. [Install Python 3.something] https://www.python.org/downloads/
+IMPORTANT: Make sure that you enable the pip installer in the advanced settings. Otherwise, you won't be able to install Pygame!
 
 2. Run `vvvvvv.py` (or `editor.py`) by opening the command prompt in the current folder and typing `py vvvvvv.py`. Or you can just use an IDE like PyCharm like I did.
 
-If you have problems with Pygame, install Pygame by typing `python -m pip install pygame` in the command prompt.
+If you have problems with Pygame, install Pygame by typing `python -m pip install pygame` in the command prompt. If that doesn't work, try just 'pip install pygame'.
 
 ## Versions
 
@@ -104,8 +105,6 @@ If you have problems with Pygame, install Pygame by typing `python -m pip instal
 + The version number hides if the continue option is shown
 + Fixed bug where you could save when cheating, but not retry :(
 + Made the secret easier to find
-
-### v1.6 (16:9 Paradigm):
 
 +
 KNOWN BUGS:

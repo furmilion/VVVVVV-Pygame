@@ -12,9 +12,96 @@ IMPORTANT: Make sure that you enable the pip installer in the advanced settings.
 
 If you have problems with Pygame, install Pygame by typing `python -m pip install pygame` in the command prompt. If that doesn't work, try just 'pip install pygame'.
 
+KNOWN BUGS:
++ Player "clips" inside walls sometimes, can't flip off any of the blocks though
++ When transitioning to a different room, the name renders 1 frame before the room renders
++ Running into a wall with a spike on it may ocassionally kill the player, even though the wall should always take priority
++ Will sometimes fall through a horizontal platform (???)
++ Player moves 3 pixels into vertical platform moving upwards, purposefully 
++ Pausing the game in the ending cutscene causes the music fadeout to mess up.
+
 ## Versions
 
-### v1.0:
+### v1.5.1:
+
++ Completing the game in debug mode is no longer considered cheating
++ Fixes a bug when switching between the editor and the main game
++ Misc Editor changes
++ Viridian's color is now accurate (except the glow)
+
+## v1.5 (Performance update):
+
++ You can toggle Fullscreen mode in-game
++ If settings.vvvvvv is outdated or missing, game will reset settings and proceed as normal.
++ You can launch the editor from the main game
++ Decreased load time of rooms by optimizing the way sprites are re-parsed.
+	+ Space station (~33% faster)
+	+ Lab (~40% faster)
+	+ Warp zone (~10% faster)
++ You can now close the editor with q or Escape. Opening the guide is now done with h.
++ Improved typing in the editor
++ The version number hides if the continue option is shown
++ Fixed bug where you could save when cheating, but not retry :(
++ Made the secret easier to find
+
+## v1.4 (QOL Changes):
+
++ Changed player physics when turning around at a high speed
++ Debug mode is no longer a cheat and you can save replays with it enabled. (Records are still not saved)
++ Streamlined the setting and replay code even more to allow automatic changing between multiple settings
+	+ Replays now save / load the cheats that were used when they were recorded automatically.
+	+ You can now restart replays from the pause menu.
+	+ Replays have more compact and easy to read filenames.
++ Made platform collision slightly better
++ Fixed bug which caused spikes to kill earlier when infinite flips was enabled.
++ Game now resets the framerate and debug menu when turning debug mode off.
++ You can change roomnames in editor.py without going to the console (type in-game)
++ Organized editor guide. Can press 'q' to close the program.
++ Editor now saves a room automatically upon changing rooms or closing with q. Closing otherwise will NOT save the room.
++ Added a secret. Good luck finding it ;)
+
+## v1.3 (Replays!):
+
++ Added replays! Still very experimental.. Bugs likely!
++ Adjusted previous framerate debugging tool so less K presses are required to get to a low framerate and vice versa
++ Framerate now shows in HUD if debbuging tool is active
++ Adjusted player.png to make player appear more like he does in VVVVVV
++ Adjusted logo.png to make logo appear more like it does in VVVVVV
++ Adjusted light blue color some graphics have to be slightly darker
++ Adjusted Enemy forgiveness again [30, 26, 38, 40] -> [32, 30, 38, 28]
++ Changed the function of the retry button to retry a level from the beginning, instead of only killing the player
++ Fixed a previously unknown bug where going through a warp upwards was slightly faster than downwards
++ Streamlined the settings code to make it more practical. Settings now save immediately after changing instead when going to the main menu
+
+## v1.2 (More improvements):
+
++ New debug feature! Pressing 'K' and 'L' will allow you to change your max framerate by 1.
+	+ Play the game frame-by-frame! Very useful for figuring out bugs :)
++ Settings will now save in "settings.vvvvvv"
++ Adjusted gravity line physics again, I just can't seem to get this right
++ Changed player width from 48 -> 50. Gravity lines aren't affected by this change
+	+ Helps prevent falling into 1 block gaps you shouldn't be able to fall into
+	+ Makes collision with walls marginally better (The alignment that previously clipped the farthest into walls won't anymore)
++ Changed conveyor belt physics slightly to prevent clipping fully into walls, conveyor belts are also slightly stronger than before
++ Music pack 2 is now 100% siIvagunner :)
+
+## v1.1 (Settings):
+
++ Added more menus!
++ Added customizable music packs! 2 packs are currently implemented
+	+ Theoretically, infinite packs are supported. Simply create another folder with the tracks you want
++ Added adjustable music slider
++ Added adjustable sfx slider
++ Added cheats, enabling 1 or more will disable saving scores and overlay the game with a red "C"
+	+ Made debug mode toggleable (F3, C+H, and period/comma)
+	+ Added Invincibility mode
+	+ Added Flips in mid-air
+	+ Makes speedruns more practical since it is now obvious if someone is cheating
++ HUD display is now adjustable in-game
++ Adjusted gravity line physics again
++ Can buffer flips off of vertical platforms
+
+## v1.0:
 
 + Added acceleration to make movement more smooth.
 + Adjusted Fall speed (20 -> 16)
@@ -34,89 +121,5 @@ If you have problems with Pygame, install Pygame by typing `python -m pip instal
 + Slightly lowered volume of gravity lines
 + Fixed bug where player doesn't transition smoothly vertically with vertical warping enabled.
 
-### v1.1 (Settings):
 
-+ Added more menus!
-+ Added customizable music packs! 2 packs are currently implemented
-	+ Theoretically, infinite packs are supported. Simply create another folder with the tracks you want
-+ Added adjustable music slider
-+ Added adjustable sfx slider
-+ Added cheats, enabling 1 or more will disable saving scores and overlay the game with a red "C"
-	+ Made debug mode toggleable (F3, C+H, and period/comma)
-	+ Added Invincibility mode
-	+ Added Flips in mid-air
-	+ Makes speedruns more practical since it is now obvious if someone is cheating
-+ HUD display is now adjustable in-game
-+ Adjusted gravity line physics again
-+ Can buffer flips off of vertical platforms
 
-### v1.2 (More improvements):
-
-+ New debug feature! Pressing 'K' and 'L' will allow you to change your max framerate by 1.
-	+ Play the game frame-by-frame! Very useful for figuring out bugs :)
-+ Settings will now save in "settings.vvvvvv"
-+ Adjusted gravity line physics again, I just can't seem to get this right
-+ Changed player width from 48 -> 50. Gravity lines aren't affected by this change
-	+ Helps prevent falling into 1 block gaps you shouldn't be able to fall into
-	+ Makes collision with walls marginally better (The alignment that previously clipped the farthest into walls won't anymore)
-+ Changed conveyor belt physics slightly to prevent clipping fully into walls, conveyor belts are also slightly stronger than before
-+ Music pack 2 is now 100% siIvagunner :)
-
-### v1.3 (Replays!):
-
-+ Added replays! Still very experimental.. Bugs likely!
-+ Adjusted previous framerate debugging tool so less K presses are required to get to a low framerate and vice versa
-+ Framerate now shows in HUD if debbuging tool is active
-+ Adjusted player.png to make player appear more like he does in VVVVVV
-+ Adjusted logo.png to make logo appear more like it does in VVVVVV
-+ Adjusted light blue color some graphics have to be slightly darker
-+ Adjusted Enemy forgiveness again [30, 26, 38, 40] -> [32, 30, 38, 28]
-+ Changed the function of the retry button to retry a level from the beginning, instead of only killing the player
-+ Fixed a previously unknown bug where going through a warp upwards was slightly faster than downwards
-+ Streamlined the settings code to make it more practical. Settings now save immediately after changing instead when going to the main menu
-
-### v1.4 (QOL Changes):
-
-+ Changed player physics when turning around at a high speed
-+ Debug mode is no longer a cheat and you can save replays with it enabled. (Records are still not saved)
-+ Streamlined the setting and replay code even more to allow automatic changing between multiple settings
-	+ Replays now save / load the cheats that were used when they were recorded automatically.
-	+ You can now restart replays from the pause menu.
-	+ Replays have more compact and easy to read filenames.
-+ Made platform collision slightly better
-+ Fixed bug which caused spikes to kill earlier when infinite flips was enabled.
-+ Game now resets the framerate and debug menu when turning debug mode off.
-+ You can change roomnames in editor.py without going to the console (type in-game)
-+ Organized editor guide. Can press 'q' to close the program.
-+ Editor now saves a room automatically upon changing rooms or closing with q. Closing otherwise will NOT save the room.
-+ Added a secret. Good luck finding it ;)
-
-### v1.5 (Performance update):
-
-+ You can toggle Fullscreen mode in-game
-+ If settings.vvvvvv is outdated or missing, game will reset settings and proceed as normal.
-+ You can launch the editor from the main game
-+ Decreased load time of rooms by optimizing the way sprites are re-parsed.
-	+ Space station (~33% faster)
-	+ Lab (~40% faster)
-	+ Warp zone (~10% faster)
-+ You can now close the editor with q or Escape. Opening the guide is now done with h.
-+ Improved typing in the editor
-+ The version number hides if the continue option is shown
-+ Fixed bug where you could save when cheating, but not retry :(
-+ Made the secret easier to find
-
-## v1.5.1:
-
-+ Completing the game in debug mode is no longer considered cheating
-+ Fixes a bug when switching between the editor and the main game
-+ Misc Editor changes
-+ Viridian's color is now accurate (except the glow)
-
-KNOWN BUGS:
-+ Player "clips" inside walls sometimes, can't flip off any of the blocks though
-+ When transitioning to a different room, the name renders 1 frame before the room renders
-+ Running into a wall with a spike on it may ocassionally kill the player, even though the wall should always take priority
-+ Will sometimes fall through a horizontal platform (???)
-+ Player moves 3 pixels into vertical platform moving upwards, purposefully 
-+ Pausing the game in the ending cutscene causes the music fadeout to mess up.

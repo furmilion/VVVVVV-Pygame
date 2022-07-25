@@ -3,20 +3,20 @@ try:
     import pygame, json, math, random, time, os
     from pygame.draw import line, rect
     from datetime import datetime
-    import importlib
 except ImportError:
-    os.system('py3 -m pip install pygame')  # Automatically install PyGame
+    os.system('pip install pygame')  # Automatically install PyGame
 from spritesheet import Spritesheet   # Saved in another file since it's used elsewhere
 from palette import Palette
 
 pygame.mixer.pre_init(44100, -16, 2, 1024)  # Removes sound latency
 pygame.init()
 
-screenSize = [960, 640] # 960 , 640     # 1536 , 864
+screenSize = [960, 640] # 960 , 640     # 1280 , 800
 screen = pygame.display.set_mode(screenSize)
 pygame.display.set_caption("VVVVVV")
 pygame.display.set_icon(pygame.image.load("./assets/icon.png"))
 epstein_didnt_kill_himself = True
+run_editor = False # Run editor after closing the game?
 clock = pygame.time.Clock()
 framerate = 60  # In Frames per seconds.
 ingame = False  # False means you're in a menu, True means you're in gameplay
@@ -110,7 +110,7 @@ class Player:
         self.winTarget = []        # Position to automatically walk to upon touching a teleporter
         self.winLines = []         # Text that's displayed during winning cutscene - only rendered once for the sake of optimizng
 
-        self.animationSpeed = 5    # Speed of walking animation
+        self.animationSpeed = 6    # Speed of walking animation
         self.animationTimer = 0    # ^ timer
         self.coyoteFrames = 4      # Time window where you're STILL allowed to flip, even after leaving the ground
         self.coyoteTimer = 0       # ^ timer
@@ -483,9 +483,9 @@ class Player:
                 pygame.mixer.music.load("./assets/musicpack" + str(setting.musicpackSelected) + "/fanfare.ogg")  # ...then play a little jingle...
                 pygame.mixer.music.play(1)
             if self.winTimer > 335 and self.textboxBuffer == False:
-                screen.blit(levelComplete, (160, 50))   # ...then display "level complete"...
+                screen.blit(levelComplete, ((screenSize[0] / 2)-320, 50))   # ...then display "level complete"...
 
-                if setting.invincible or setting.flippyboi or setting.debugtools:
+                if setting.invincible or setting.flippyboi:
                     messages = [
                         "You've cheated " + area,
                         "Flips: " + str(player.flips),
@@ -1450,7 +1450,7 @@ def buildmenu():    # Builds the main menu
         menu.lock(1)    # Disable "continue" option if no saved game
 
 def runMenus():   # Run code depending on what menu option is selected
-    global menu,area,player,key,ingame,checkpoint,levelFolder,cpRoom,epstein_didnt_kill_himself,levelnum,menutext,replaylist
+    global menu,area,player,key,ingame,checkpoint,levelFolder,cpRoom,run_editor,epstein_didnt_kill_himself,levelnum,menutext,replaylist
     option = menu.run()
 
     if menu.name == "pause":    # Pause menu
@@ -1540,7 +1540,7 @@ def runMenus():   # Run code depending on what menu option is selected
                 levelList.append(i["name"].lower().replace("the ", ""))
             levelList.append("back")
             menu = Menu("levels", levelList, 100)
-        version = "v1.5"     # Display the version number only if continue isn't selected.
+        version = "v1.5.1"     # Display the version number only if continue isn't selected.
         if savedGame:   # If you have a saved game and "continue" is pressed, pick up from where you left off
             savedStage = levels[savedGame["stage"]]
             if menu.selected == 1:  # Display some info about your saved game when hovering over
@@ -1588,11 +1588,9 @@ def runMenus():   # Run code depending on what menu option is selected
         if menu.selected == 2:
             screen.blit(menutext, (20, screenSize[1] - 35))
         if option == 3:
-            import editor
-            # editor = importlib.reload(editor)
-            importlib.invalidate_caches()
-            importlib.reload(editor)
-
+            run_editor = True
+            epstein_didnt_kill_himself = False # Close the program afterwards.
+            
         if option == 4:
             sfx_menu.play()
             setting.save('',0)
@@ -1928,3 +1926,7 @@ while epstein_didnt_kill_himself:   # Runs every frame @ 60 FPS
     clock.tick(framerate)  # 60 FPS
 
 pygame.quit()   # Adios!
+
+# Now that the game is closed...
+if run_editor:
+    exec(open("editor.py").read())

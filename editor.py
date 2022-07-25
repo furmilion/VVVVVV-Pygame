@@ -2,12 +2,10 @@ import os
 try:
     import pygame, json, math, random, os
     from pygame.draw import line, rect
-    from importlib import reload
 except ImportError:
     os.system('py3 -m pip install pygame')
 from spritesheet import Spritesheet
 from palette import Palette
-from multiprocessing import Pool
 
 with open('./assets/editorTiles.vvvvvv', 'r') as et:
     specialTiles = json.loads(et.read())
@@ -19,15 +17,16 @@ with open("levels.vvvvvv", 'r') as levelarray:
     levels = json.loads(levelarray.read())
     levelFolder = levels[0]["folder"]
 
-editorGuide = open("editorGuide.txt", "r")
+editorGuide = open("guides/editorGuide.txt", "r")
 editorGuide = editorGuide.read().splitlines()
 
 pygame.init()
-screenSize = [960, 736] # 1536, 864
-screen = pygame.display.set_mode(screenSize)
+screenSize = [960, 736]
+screen = pygame.display.set_mode(screenSize,pygame.SCALED|pygame.RESIZABLE)
 pygame.display.set_caption("VVVVVV Editor")
 pygame.display.set_icon(pygame.image.load("./assets/icon.png"))
 done = False
+run_game = False # Run the game after closing the editor. Set to True if playtesting
 menu = False
 typing = False     # Boolean for determining if the player is typing
 fastdelete = False
@@ -434,7 +433,6 @@ while not done:
         elif event.type == pygame.KEYUP and typing:
             fastdelete = False
             typingTime = -1
-            print(typingTime)
 
                 
         elif event.type == pygame.KEYDOWN and not menu:
@@ -442,16 +440,11 @@ while not done:
             for i in range(1, 10): # Eval seems to be the best way to check if *any* function key is pressed
                 if event.key == eval("pygame.K_F" + str(i)) and i <= len(levels):
                     loadFolder(levels[i-1])
-            if event.key == pygame.K_q or event.key == pygame.K_ESCAPE:
-                from vvvvvv import buildmenu
-                saveLevel()
+            if event.key == pygame.K_RETURN:
+                run_game = True
                 done = True
-                p = Pool(1)
-                with p:
-                    screen = pygame.display.quit()
-                    pygame.display.set_caption("VVVVVV Script handler")
-                    pygame.display.set_icon(pygame.image.load("./assets/icon.png"))
-                    p.map(buildmenu, [0,1])
+            elif event.key == pygame.K_q or event.key == pygame.K_ESCAPE:
+                done = True
             elif event.key == pygame.K_RIGHT:
                 if roomTimer > 120:
                     saveLevel()
@@ -689,13 +682,12 @@ while not done:
                     if (x[3] and x[0]-16 == gridX*32 and x[1] == gridY*32) or (not x[3] and x[0] == gridX*32 and x[1]-16 == gridY*32):
                         del room.lines[y]
 
-    if typingTime + 25 < roomTimer and typingTime > 0 and typing: # Part 2 of the typing code
-        if roomTimer % 4 == 0 and fastdelete == True:
+    if typingTime + 15 < roomTimer and typingTime > 0 and typing: # Part 2 of the typing code
+        if roomTimer % 3 == 0 and fastdelete == True:
             text = text[:-1]            
-        elif roomTimer % 5 == 0:
+        elif roomTimer % 4 == 0:
             text += addkey
         room.meta["name"] = text
-        print('5 frames')
     if menu:
         rect(screen, grey(0), (0, 0, screenSize[0], screenSize[1]), 0)
         pos = 10
@@ -748,3 +740,7 @@ while not done:
     clock.tick(60)
 
 pygame.quit()
+
+# Now that the editor is closed...
+if run_game:
+    exec(open("vvvvvv.py").read())

@@ -106,7 +106,13 @@ If you have problems with Pygame, install Pygame by typing `python -m pip instal
 + Fixed bug where you could save when cheating, but not retry :(
 + Made the secret easier to find
 
-+
+## v1.5.1:
+
++ Completing the game in debug mode is no longer considered cheating
++ Fixes a bug when switching between the editor and the main game
++ Misc Editor changes
++ Viridian's color is now accurate (except the glow)
+
 KNOWN BUGS:
 + Player "clips" inside walls sometimes, can't flip off any of the blocks though
 + When transitioning to a different room, the name renders 1 frame before the room renders

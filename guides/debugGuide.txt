@@ -1,0 +1,6 @@
+Debug guide
+
+F3: Displays the current time as well as other information like room load speed
+K: Slows down FPS
+L: Speeds up FPS
+Semicolon: Resets FPS to 60

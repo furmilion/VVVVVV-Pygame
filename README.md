@@ -26,7 +26,7 @@ KNOWN BUGS:
 
 + Completing the game in debug mode is no longer considered cheating
 + Fixes a bug when switching between the editor and the main game
-+ Misc Editor changes
++ Misc editor changes
 + Viridian's color is now accurate (except the glow)
 
 ## v1.5 (Performance update):
@@ -38,7 +38,6 @@ KNOWN BUGS:
 	+ Space station (~33% faster)
 	+ Lab (~40% faster)
 	+ Warp zone (~10% faster)
-+ You can now close the editor with q or Escape. Opening the guide is now done with h.
 + Improved typing in the editor
 + The version number hides if the continue option is shown
 + Fixed bug where you could save when cheating, but not retry :(
@@ -65,7 +64,6 @@ KNOWN BUGS:
 + Added replays! Still very experimental.. Bugs likely!
 + Adjusted previous framerate debugging tool so less K presses are required to get to a low framerate and vice versa
 + Framerate now shows in HUD if debbuging tool is active
-+ Adjusted player.png to make player appear more like he does in VVVVVV
 + Adjusted logo.png to make logo appear more like it does in VVVVVV
 + Adjusted light blue color some graphics have to be slightly darker
 + Adjusted Enemy forgiveness again [30, 26, 38, 40] -> [32, 30, 38, 28]

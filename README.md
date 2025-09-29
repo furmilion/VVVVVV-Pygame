@@ -4,6 +4,11 @@ Exactly what it sounds like. I'm too lazy to go over all the detail but all the 
 
 If you want to add a new stage to the game, add a new level object to `levels.vvvvvv`, and it will automatically appear in both the main game and the editor (via one of the function keys)
 
+## TODO List
+[x] Implement warp tokens
+
+^^^ Merge pending
+
 ## How do I run this?
 1. [Install Python 3.something] https://www.python.org/downloads/
 IMPORTANT: Make sure that you enable the pip installer in the advanced settings. Otherwise, you won't be able to install Pygame!
